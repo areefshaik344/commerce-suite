@@ -3,9 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { analyticsData, orders } from "@/data/mock-orders";
-import { DollarSign, Package, ShoppingCart, TrendingUp } from "lucide-react";
+import { DollarSign, Package, ShoppingCart, TrendingUp, Rocket, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { useVendorOnboardingStore } from "@/store/vendorOnboardingStore";
+import { Progress } from "@/components/ui/progress";
 
 const COLORS = ["hsl(142 71% 45%)", "hsl(221 83% 53%)", "hsl(38 92% 50%)", "hsl(280 67% 54%)", "hsl(0 72% 51%)", "hsl(220 10% 46%)"];
 
@@ -19,6 +21,9 @@ const statusColors: Record<string, string> = {
 
 export default function VendorDashboard() {
   const navigate = useNavigate();
+  const onboarding = useVendorOnboardingStore();
+  const completion = onboarding.completionPercent();
+  const showBanner = onboarding.finalStatus !== "approved";
   const revenueData = analyticsData.monthlyRevenue.map(d => ({ ...d, revenue: d.revenue / 100000 }));
   const statusData = analyticsData.ordersByStatus;
 
@@ -28,6 +33,30 @@ export default function VendorDashboard() {
         <h1 className="font-display text-xl font-bold">Vendor Dashboard</h1>
         <p className="text-sm text-muted-foreground">Welcome back! Here's your store overview.</p>
       </div>
+
+      {showBanner && (
+        <Card className="shadow-card border-primary/30 bg-gradient-to-r from-primary/10 via-background to-background">
+          <CardContent className="p-5 flex flex-col md:flex-row md:items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+              <Rocket className="h-6 w-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-display font-semibold">
+                {onboarding.finalStatus === "under_review" ? "Application under review" :
+                 onboarding.finalStatus === "rejected" ? "Action required on your application" :
+                 "Complete your seller onboarding"}
+              </p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {completion}% complete · finish all steps to start selling.
+              </p>
+              <Progress value={completion} className="h-1.5 mt-2 max-w-md" />
+            </div>
+            <Button onClick={() => navigate("/vendor/onboarding")} className="gap-1.5 shrink-0">
+              {onboarding.finalStatus === "rejected" ? "Fix issues" : "Continue"} <ChevronRight className="h-4 w-4" />
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Revenue" value="₹89.5L" change="+12.5% from last month" changeType="positive" icon={DollarSign} iconClassName="bg-success/10 text-success" />
