@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { LayoutDashboard, Package, ShoppingCart, Star, DollarSign, Settings, Users, Store, Tag, BarChart3, Image, Ticket, Truck, Archive, ClipboardCheck, Percent, ShieldAlert, FileBarChart, RotateCcw, Upload, Palette, FileText, Mail } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Star, DollarSign, Settings, Users, Store, Tag, BarChart3, Image, Ticket, Truck, Archive, ClipboardCheck, Percent, ShieldAlert, FileBarChart, RotateCcw, Upload, Palette, FileText, Mail, Megaphone, LifeBuoy, Activity } from "lucide-react";
 
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -60,6 +60,10 @@ const VendorAnalytics = lazy(() => import("@/pages/vendor/VendorAnalytics"));
 const VendorReturns = lazy(() => import("@/pages/vendor/VendorReturns"));
 const VendorBulkUpload = lazy(() => import("@/pages/vendor/VendorBulkUpload"));
 const VendorStoreCustomization = lazy(() => import("@/pages/vendor/VendorStoreCustomization"));
+const VendorPerformance = lazy(() => import("@/pages/vendor/VendorPerformance"));
+const VendorAds = lazy(() => import("@/pages/vendor/VendorAds"));
+const VendorDisputes = lazy(() => import("@/pages/vendor/VendorDisputes"));
+const VendorTickets = lazy(() => import("@/pages/vendor/VendorTickets"));
 
 const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
@@ -98,18 +102,22 @@ function PageLoader() {
 
 const vendorNav = [
   { title: "Dashboard", url: "/vendor", icon: LayoutDashboard },
+  { title: "Onboarding", url: "/vendor/onboarding", icon: ClipboardCheck },
   { title: "Products", url: "/vendor/products", icon: Package },
   { title: "Bulk Upload", url: "/vendor/products/bulk-upload", icon: Upload },
   { title: "Inventory", url: "/vendor/inventory", icon: Archive },
   { title: "Orders", url: "/vendor/orders", icon: ShoppingCart },
   { title: "Returns", url: "/vendor/returns", icon: RotateCcw },
+  { title: "Disputes", url: "/vendor/disputes", icon: ShieldAlert },
   { title: "Shipping", url: "/vendor/shipping", icon: Truck },
   { title: "Coupons", url: "/vendor/coupons", icon: Tag },
+  { title: "Ads", url: "/vendor/ads", icon: Megaphone },
   { title: "Reviews", url: "/vendor/reviews", icon: Star },
+  { title: "Performance", url: "/vendor/performance", icon: Activity },
   { title: "Analytics", url: "/vendor/analytics", icon: BarChart3 },
   { title: "Financials", url: "/vendor/financials", icon: DollarSign },
   { title: "Store Design", url: "/vendor/store-customization", icon: Palette },
-  { title: "Onboarding", url: "/vendor/onboarding", icon: ClipboardCheck },
+  { title: "Help & Tickets", url: "/vendor/tickets", icon: LifeBuoy },
   { title: "Settings", url: "/vendor/settings", icon: Settings },
 ];
 
@@ -197,6 +205,10 @@ const App = () => (
                 <Route path="/vendor/financials/payouts" element={<VendorPayoutHistory />} />
                 <Route path="/vendor/store-customization" element={<VendorStoreCustomization />} />
                 <Route path="/vendor/onboarding" element={<VendorOnboarding />} />
+                <Route path="/vendor/performance" element={<VendorPerformance />} />
+                <Route path="/vendor/ads" element={<VendorAds />} />
+                <Route path="/vendor/disputes" element={<VendorDisputes />} />
+                <Route path="/vendor/tickets" element={<VendorTickets />} />
                 <Route path="/vendor/settings" element={<VendorSettings />} />
               </Route>
 
