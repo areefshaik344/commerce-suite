@@ -1,10 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { UserRole, User } from "@/data/mock-users";
+import type { UserRole, User, VendorStatus } from "@/data/mock-users";
 import { mockUsers, mockCredentials } from "@/mocks";
 
 export interface VendorApplication {
   id: string;
+  userId: string;
   name: string;
   email: string;
   phone: string;
@@ -13,6 +14,7 @@ export interface VendorApplication {
   description: string;
   status: "pending" | "approved" | "rejected";
   appliedDate: string;
+  reviewNote?: string;
 }
 
 interface AuthState {
@@ -25,9 +27,10 @@ interface AuthState {
   loginWithCredentials: (email: string, password: string) => boolean;
   signupWithCredentials: (name: string, email: string, phone: string, password: string) => void;
   registerVendor: (name: string, email: string, phone: string, password: string, storeName: string, category: string, description: string) => void;
+  applyAsVendor: (storeName: string, category: string, description: string) => { success: boolean; message: string };
   logout: () => void;
   approveVendor: (appId: string) => void;
-  rejectVendor: (appId: string) => void;
+  rejectVendor: (appId: string, note?: string) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -37,8 +40,7 @@ export const useAuthStore = create<AuthState>()(
       currentRole: "customer",
       isAuthenticated: false,
       vendorApplications: [
-        { id: "va-1", name: "Suresh Kumar", email: "suresh@example.com", phone: "9876543210", storeName: "GadgetPro", category: "electronics", description: "Latest gadgets and accessories", status: "pending", appliedDate: "2025-02-20" },
-        { id: "va-2", name: "Meena Devi", email: "meena@example.com", phone: "8765432109", storeName: "FashionFiesta", category: "fashion", description: "Trendy women's clothing", status: "pending", appliedDate: "2025-02-25" },
+        { id: "va-1", userId: "u-4", name: "Anita Singh", email: "anita@example.com", phone: "+91 76543 21098", storeName: "GadgetPro", category: "electronics", description: "Latest gadgets and accessories", status: "pending", appliedDate: "2025-02-20" },
       ],
 
       login: (role) => {
@@ -61,46 +63,88 @@ export const useAuthStore = create<AuthState>()(
       },
 
       signupWithCredentials: (name, email, phone, _password) => {
+        if (mockCredentials.find(c => c.email === email)) {
+          throw new Error("Email already registered");
+        }
         const newUser: User = {
           id: `u-${Date.now()}`,
           name, email, avatar: "", role: "customer",
           phone: `+91 ${phone}`,
           joinedDate: new Date().toISOString().split("T")[0],
+          isVendor: false,
+          vendorStatus: "none",
         };
         mockCredentials.push({ email, password: _password, userId: newUser.id });
         mockUsers.push(newUser);
         set({ currentUser: newUser, currentRole: "customer", isAuthenticated: true });
       },
 
-      registerVendor: (name, email, phone, _password, storeName, category, description) => {
+      // Legacy: kept for backward compatibility (no longer creates users)
+      registerVendor: (_name, _email, _phone, _password, storeName, category, description) => {
+        const state = useAuthStore.getState();
+        if (state.currentUser) state.applyAsVendor(storeName, category, description);
+      },
+
+      applyAsVendor: (storeName, category, description) => {
+        const state = useAuthStore.getState();
+        const user = state.currentUser;
+        if (!user) return { success: false, message: "You must be logged in" };
+        if (state.vendorApplications.some(a => a.userId === user.id && a.status === "pending")) {
+          return { success: false, message: "You already have a pending application" };
+        }
+        if (user.isVendor || user.vendorStatus === "active" || user.vendorStatus === "approved") {
+          return { success: false, message: "You are already a seller" };
+        }
         const app: VendorApplication = {
           id: `va-${Date.now()}`,
-          name, email, phone, storeName, category, description,
+          userId: user.id,
+          name: user.name, email: user.email, phone: user.phone,
+          storeName, category, description,
           status: "pending",
           appliedDate: new Date().toISOString().split("T")[0],
         };
-        const newUser: User = {
-          id: `u-${Date.now()}`,
-          name, email, avatar: "", role: "customer",
-          phone: `+91 ${phone}`,
-          joinedDate: new Date().toISOString().split("T")[0],
-        };
-        mockCredentials.push({ email, password: _password, userId: newUser.id });
-        mockUsers.push(newUser);
-        set(state => ({
-          vendorApplications: [...state.vendorApplications, app],
+        // Update mock user record
+        const idx = mockUsers.findIndex(u => u.id === user.id);
+        if (idx !== -1) mockUsers[idx] = { ...mockUsers[idx], vendorStatus: "pending" };
+        const updatedUser: User = { ...user, vendorStatus: "pending" };
+        set(s => ({
+          currentUser: updatedUser,
+          vendorApplications: [...s.vendorApplications, app],
         }));
+        return { success: true, message: "Application submitted" };
       },
 
       logout: () => set({ currentUser: null, isAuthenticated: false, currentRole: "customer" }),
 
-      approveVendor: (appId) => set(state => ({
-        vendorApplications: state.vendorApplications.map(a => a.id === appId ? { ...a, status: "approved" as const } : a),
-      })),
+      approveVendor: (appId) => set(state => {
+        const app = state.vendorApplications.find(a => a.id === appId);
+        if (app) {
+          const idx = mockUsers.findIndex(u => u.id === app.userId);
+          if (idx !== -1) mockUsers[idx] = { ...mockUsers[idx], role: "vendor", isVendor: true, vendorStatus: "active" };
+        }
+        const updatedCurrent = state.currentUser && app && state.currentUser.id === app.userId
+          ? { ...state.currentUser, role: "vendor" as UserRole, isVendor: true, vendorStatus: "active" as VendorStatus }
+          : state.currentUser;
+        return {
+          currentUser: updatedCurrent,
+          vendorApplications: state.vendorApplications.map(a => a.id === appId ? { ...a, status: "approved" as const } : a),
+        };
+      }),
 
-      rejectVendor: (appId) => set(state => ({
-        vendorApplications: state.vendorApplications.map(a => a.id === appId ? { ...a, status: "rejected" as const } : a),
-      })),
+      rejectVendor: (appId, note) => set(state => {
+        const app = state.vendorApplications.find(a => a.id === appId);
+        if (app) {
+          const idx = mockUsers.findIndex(u => u.id === app.userId);
+          if (idx !== -1) mockUsers[idx] = { ...mockUsers[idx], vendorStatus: "rejected" };
+        }
+        const updatedCurrent = state.currentUser && app && state.currentUser.id === app.userId
+          ? { ...state.currentUser, vendorStatus: "rejected" as VendorStatus }
+          : state.currentUser;
+        return {
+          currentUser: updatedCurrent,
+          vendorApplications: state.vendorApplications.map(a => a.id === appId ? { ...a, status: "rejected" as const, reviewNote: note } : a),
+        };
+      }),
     }),
     {
       name: "markethub-auth",
