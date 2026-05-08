@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,19 +14,29 @@ import { useStore } from "@/store/useStore";
 import { useToast } from "@/hooks/use-toast";
 
 export default function VendorRegisterPage() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
   const [storeName, setStoreName] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { registerVendor } = useStore();
+  const { applyAsVendor, currentUser, isAuthenticated } = useStore();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Auth + status guard: customer-as-applicant model
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: "/vendor/register" }, replace: true });
+      return;
+    }
+    const status = currentUser?.vendorStatus ?? "none";
+    if (currentUser?.isVendor || status === "active" || status === "approved") {
+      navigate("/vendor", { replace: true });
+    } else if (status === "pending") {
+      navigate("/vendor/register/success", { replace: true });
+    }
+  }, [isAuthenticated, currentUser, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,10 +45,14 @@ export default function VendorRegisterPage() {
       return;
     }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    registerVendor(name, email, phone, password, storeName, category, description);
+    await new Promise(r => setTimeout(r, 900));
+    const res = applyAsVendor(storeName, category, description);
     setLoading(false);
-    toast({ title: "Application submitted!", description: "We'll review your application within 2-3 business days. You can complete onboarding after approval." });
+    if (!res.success) {
+      toast({ title: "Couldn't submit", description: res.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Application submitted!", description: "We'll review within 2-3 business days." });
     navigate("/vendor/register/success");
   };
 
@@ -84,50 +98,28 @@ export default function VendorRegisterPage() {
       <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
         <div className="w-full max-w-lg space-y-6">
           <div>
-            <Link to="/login" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
-              <ArrowLeft className="h-4 w-4" /> Back to login
+            <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
+              <ArrowLeft className="h-4 w-4" /> Back to MarketHub
             </Link>
             <h2 className="text-2xl font-display font-bold flex items-center gap-2">
               <Store className="h-6 w-6 text-primary" /> Become a Seller
             </h2>
-            <p className="text-sm text-muted-foreground mt-1">Register your store and start selling today</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Applying as <span className="font-medium text-foreground">{currentUser?.name}</span> ({currentUser?.email})
+            </p>
           </div>
 
           <Card className="shadow-elevated border-0">
             <CardContent className="p-6">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Personal Details</p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Full Name *</Label>
-                    <Input placeholder="Your name" value={name} onChange={e => setName(e.target.value)} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Phone *</Label>
-                    <Input placeholder="+91 98765 43210" value={phone} onChange={e => setPhone(e.target.value)} required />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Email *</Label>
-                    <Input type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Password *</Label>
-                    <Input type="password" placeholder="Min 6 characters" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} />
-                  </div>
-                </div>
-
-                <Separator />
-                <div className="space-y-1">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Store Details</p>
+                  <p className="text-xs text-muted-foreground">Tell us about the store you want to open. You can complete KYC, bank & pickup details after approval.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Store Name *</Label>
-                    <Input placeholder="e.g. TechZone Electronics" value={storeName} onChange={e => setStoreName(e.target.value)} required />
+                    <Input placeholder="e.g. TechZone Electronics" value={storeName} onChange={e => setStoreName(e.target.value)} required minLength={3} maxLength={80} />
                   </div>
                   <div className="space-y-2">
                     <Label>Primary Category *</Label>
@@ -142,8 +134,9 @@ export default function VendorRegisterPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Store Description</Label>
-                  <Textarea placeholder="What do you sell?" value={description} onChange={e => setDescription(e.target.value)} rows={3} />
+                  <Label>Store Description *</Label>
+                  <Textarea placeholder="What will you sell? What makes your store unique?" value={description} onChange={e => setDescription(e.target.value)} rows={3} required minLength={20} maxLength={500} />
+                  <p className="text-[11px] text-muted-foreground text-right">{description.length}/500</p>
                 </div>
 
                 <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
