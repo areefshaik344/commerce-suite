@@ -8,7 +8,7 @@ import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ShoppingCart, Heart, User, ChevronDown, MapPin, Bell, LogOut, Package, Settings } from "lucide-react";
+import { ShoppingCart, Heart, User, ChevronDown, MapPin, Bell, LogOut, Package, Settings, Store } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
@@ -46,6 +46,21 @@ export default function CustomerLayout() {
   const handleLogout = () => {
     logout();
     navigate("/login");
+  };
+
+  const handleSellOnMarketHub = () => {
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: "/vendor/register" } });
+      return;
+    }
+    const status = currentUser?.vendorStatus ?? "none";
+    if (currentUser?.isVendor || status === "active" || status === "approved") {
+      navigate("/vendor");
+    } else if (status === "pending") {
+      navigate("/vendor/register/success");
+    } else {
+      navigate("/vendor/register");
+    }
   };
 
   return (
@@ -114,6 +129,12 @@ export default function CustomerLayout() {
                   <DropdownMenuItem onClick={() => navigate("/notifications")}>
                     <Bell className="mr-2 h-4 w-4" /> Notifications
                     {unread > 0 && <Badge className="ml-auto h-4 text-[10px]">{unread}</Badge>}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSellOnMarketHub}>
+                    <Store className="mr-2 h-4 w-4" /> Sell on MarketHub
+                    {currentUser?.vendorStatus === "pending" && <Badge variant="outline" className="ml-auto text-[9px]">Pending</Badge>}
+                    {(currentUser?.isVendor || currentUser?.vendorStatus === "active") && <Badge className="ml-auto text-[9px] bg-success/10 text-success border-0">Active</Badge>}
                   </DropdownMenuItem>
                   {(currentRole === "vendor" || currentRole === "admin") && (
                     <>
