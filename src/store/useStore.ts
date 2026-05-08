@@ -24,6 +24,7 @@ export function useStore() {
     loginWithCredentials: auth.loginWithCredentials,
     signupWithCredentials: auth.signupWithCredentials,
     registerVendor: auth.registerVendor,
+    applyAsVendor: auth.applyAsVendor,
     logout: auth.logout,
     vendorApplications: auth.vendorApplications,
     approveVendor: auth.approveVendor,

@@ -36,10 +36,15 @@ export default function SignupPage() {
     }
     setLoading(true);
     await new Promise(r => setTimeout(r, 1000));
-    signupWithCredentials(name, email, phone, password);
-    setLoading(false);
-    toast({ title: "Account created!", description: "Please verify your email." });
-    navigate("/verify-email");
+    try {
+      signupWithCredentials(name, email, phone, password);
+      setLoading(false);
+      toast({ title: "Account created!", description: "Please verify your email." });
+      navigate("/verify-email");
+    } catch (err) {
+      setLoading(false);
+      toast({ title: "Email already registered", description: "Try logging in instead.", variant: "destructive" });
+    }
   };
 
   const passwordStrength = () => {
