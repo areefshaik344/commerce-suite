@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,8 @@ export default function LoginPage() {
 
   const { loginWithCredentials } = useStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from || "/";
   const { toast } = useToast();
 
   const handleEmailLogin = async (e: React.FormEvent) => {
@@ -34,7 +36,7 @@ export default function LoginPage() {
     setLoading(false);
     if (success) {
       toast({ title: "Welcome back!", description: "You've been logged in successfully." });
-      navigate("/");
+      navigate(from, { replace: true });
     } else {
       toast({ title: "Invalid credentials", description: "Please check your email and password.", variant: "destructive" });
     }
@@ -60,7 +62,7 @@ export default function LoginPage() {
       loginWithCredentials(`${phone}@phone.mock`, "phone-otp");
       setLoading(false);
       toast({ title: "Welcome!", description: "Phone verified successfully." });
-      navigate("/");
+      navigate(from, { replace: true });
     } else {
       setLoading(false);
       toast({ title: "Invalid OTP", description: "Please enter a valid 6-digit OTP.", variant: "destructive" });
