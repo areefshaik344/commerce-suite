@@ -1,37 +1,29 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, Navigate } from "react-router-dom";
+import { Formik, Form } from "formik";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ArrowLeft, KeyRound, Check, Eye, EyeOff } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ArrowLeft, KeyRound, Check, Loader2, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
+import PasswordInput from "@/components/auth/PasswordInput";
+import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
+import { resetPasswordSchema } from "@/lib/validation";
+import { authApi } from "@/api/authApi";
+import { ApiError } from "@/api/apiClient";
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const state = location.state as { email?: string; otp?: string } | null;
   const [done, setDone] = useState(false);
+  const [globalError, setGlobalError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password.length < 8) {
-      toast({ title: "Password too short", description: "Must be at least 8 characters.", variant: "destructive" });
-      return;
-    }
-    if (password !== confirmPassword) {
-      toast({ title: "Passwords don't match", variant: "destructive" });
-      return;
-    }
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setDone(true);
-    setLoading(false);
-    toast({ title: "Password reset successfully!" });
-  };
+  // Hard guard: this page must only be reached via /forgot-password.
+  if (!state?.email || !state?.otp) {
+    return <Navigate to="/forgot-password" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -47,41 +39,74 @@ export default function ResetPasswordPage() {
             </div>
             <CardTitle className="text-xl font-display">{done ? "Password Updated" : "Set New Password"}</CardTitle>
             <CardDescription>
-              {done ? "Your password has been reset successfully." : "Enter your new password below."}
+              {done ? "Your password has been reset successfully." : "Choose a strong, unique password."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {!done ? (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>New Password</Label>
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      required
-                      minLength={8}
-                    />
-                    <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPassword(!showPassword)}>
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Confirm New Password</Label>
-                  <Input type="password" placeholder="••••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Resetting..." : "Reset Password"}
-                </Button>
-              </form>
-            ) : (
+            {done ? (
               <Button asChild className="w-full">
                 <Link to="/login">Go to Login</Link>
               </Button>
+            ) : (
+              <>
+                {globalError && (
+                  <Alert variant="destructive" className="mb-3">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{globalError}</AlertDescription>
+                  </Alert>
+                )}
+                <Formik
+                  initialValues={{ password: "", confirmPassword: "" }}
+                  validationSchema={resetPasswordSchema}
+                  onSubmit={async (values, { setSubmitting }) => {
+                    setGlobalError(null);
+                    try {
+                      await authApi.resetPassword(state.email!, state.otp!, values.password);
+                      setDone(true);
+                      toast.success("Password reset successful");
+                      setTimeout(() => navigate("/login", { replace: true }), 1500);
+                    } catch (err) {
+                      const message = err instanceof ApiError ? err.message : "Could not reset password";
+                      setGlobalError(message);
+                      if (err instanceof ApiError && err.status === 410) {
+                        toast.error("Reset link expired. Start over.");
+                        setTimeout(() => navigate("/forgot-password", { replace: true }), 1500);
+                      }
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                >
+                  {({ values, errors, touched, handleChange, handleBlur, isSubmitting }) => (
+                    <Form className="space-y-4" noValidate>
+                      <div className="space-y-2">
+                        <Label htmlFor="password">New Password</Label>
+                        <PasswordInput id="password" name="password" autoComplete="new-password"
+                          placeholder="••••••••" value={values.password}
+                          onChange={handleChange} onBlur={handleBlur}
+                          invalid={!!(touched.password && errors.password)} />
+                        <PasswordStrengthMeter password={values.password} />
+                        {touched.password && errors.password && (
+                          <p className="text-xs text-destructive">{errors.password}</p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                        <PasswordInput id="confirmPassword" name="confirmPassword" autoComplete="new-password"
+                          placeholder="••••••••" value={values.confirmPassword}
+                          onChange={handleChange} onBlur={handleBlur}
+                          invalid={!!(touched.confirmPassword && errors.confirmPassword)} />
+                        {touched.confirmPassword && errors.confirmPassword && (
+                          <p className="text-xs text-destructive">{errors.confirmPassword}</p>
+                        )}
+                      </div>
+                      <Button type="submit" className="w-full" disabled={isSubmitting}>
+                        {isSubmitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Resetting...</> : "Reset Password"}
+                      </Button>
+                    </Form>
+                  )}
+                </Formik>
+              </>
             )}
           </CardContent>
         </Card>
