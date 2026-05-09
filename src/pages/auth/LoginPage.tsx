@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Formik, Form } from "formik";
-import { toFormikValidationSchema as _ } from "yup"; // type-only marker; not used directly
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +20,6 @@ import { authApi } from "@/api/authApi";
 import { useOtpTimer } from "@/hooks/useOtpTimer";
 
 // Suppress unused-import warning for the type marker
-void _;
 
 export default function LoginPage() {
   const [tab, setTab] = useState<"email" | "phone">("email");
