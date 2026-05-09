@@ -1,72 +1,35 @@
-import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Formik, Form } from "formik";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Eye, EyeOff, ShieldCheck, ChevronRight } from "lucide-react";
-import { useStore } from "@/store/useStore";
-import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ShieldCheck, ChevronRight, AlertCircle, Loader2 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
+import PasswordInput from "@/components/auth/PasswordInput";
+import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
+import { signupSchema } from "@/lib/validation";
+import { ApiError } from "@/api/apiClient";
+import { useState } from "react";
 
 export default function SignupPage() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [agreed, setAgreed] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const { signupWithCredentials } = useStore();
+  const { signupWithCredentials } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
-
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password !== confirmPassword) {
-      toast({ title: "Passwords don't match", variant: "destructive" });
-      return;
-    }
-    if (!agreed) {
-      toast({ title: "Accept terms", description: "Please accept Terms & Conditions.", variant: "destructive" });
-      return;
-    }
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
-    try {
-      signupWithCredentials(name, email, phone, password);
-      setLoading(false);
-      toast({ title: "Account created!", description: "Please verify your email." });
-      navigate("/verify-email");
-    } catch (err) {
-      setLoading(false);
-      toast({ title: "Email already registered", description: "Try logging in instead.", variant: "destructive" });
-    }
-  };
-
-  const passwordStrength = () => {
-    if (!password) return { label: "", color: "", width: "0%" };
-    if (password.length < 6) return { label: "Weak", color: "bg-destructive", width: "33%" };
-    if (password.length < 10) return { label: "Medium", color: "bg-warning", width: "66%" };
-    return { label: "Strong", color: "bg-success", width: "100%" };
-  };
-  const strength = passwordStrength();
+  const [globalError, setGlobalError] = useState<string | null>(null);
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Left branding */}
       <div className="hidden lg:flex lg:w-[480px] gradient-primary flex-col justify-between p-10 text-primary-foreground relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 -left-10 w-60 h-60 rounded-full bg-white/20 blur-3xl" />
           <div className="absolute bottom-20 right-0 w-80 h-80 rounded-full bg-white/10 blur-3xl" />
         </div>
         <div className="relative z-10">
-          <Link to="/">
-            <h1 className="text-3xl font-display font-bold">MarketHub</h1>
-          </Link>
+          <Link to="/"><h1 className="text-3xl font-display font-bold">MarketHub</h1></Link>
           <p className="text-sm mt-1 opacity-80">Join millions of happy shoppers</p>
         </div>
         <div className="relative z-10 space-y-4">
@@ -84,7 +47,6 @@ export default function SignupPage() {
         <p className="relative z-10 text-xs opacity-60">© 2025 MarketHub. All rights reserved.</p>
       </div>
 
-      {/* Right form */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md space-y-6">
           <div className="text-center lg:text-left">
@@ -94,70 +56,85 @@ export default function SignupPage() {
 
           <Card className="shadow-elevated border-0">
             <CardContent className="p-6">
-              <form onSubmit={handleSignup} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Full Name</Label>
-                  <Input placeholder="Rahul Sharma" value={name} onChange={e => setName(e.target.value)} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Email Address</Label>
-                  <Input type="email" placeholder="rahul@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Phone Number</Label>
-                  <div className="flex gap-2">
-                    <div className="flex items-center px-3 rounded-md border bg-muted text-sm font-medium text-muted-foreground">+91</div>
-                    <Input placeholder="98765 43210" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} maxLength={10} required />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Password</Label>
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Min 6 characters"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      required
-                      minLength={6}
-                    />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {password && (
-                    <div className="space-y-1">
-                      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                        <div className={`h-full ${strength.color} transition-all rounded-full`} style={{ width: strength.width }} />
+              {globalError && (
+                <Alert variant="destructive" className="mb-3">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{globalError}</AlertDescription>
+                </Alert>
+              )}
+              <Formik
+                initialValues={{ name: "", email: "", phone: "", password: "", confirmPassword: "", acceptTerms: false }}
+                validationSchema={signupSchema}
+                onSubmit={async (values, { setSubmitting }) => {
+                  setGlobalError(null);
+                  try {
+                    await signupWithCredentials(values.name, values.email.trim(), values.phone, values.password);
+                    toast.success("Account created!", { description: "Please verify your email." });
+                    navigate("/verify-email", { state: { email: values.email.trim() } });
+                  } catch (err) {
+                    const message = err instanceof ApiError ? err.message : "Could not create account";
+                    setGlobalError(message);
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+              >
+                {({ values, errors, touched, handleChange, handleBlur, setFieldValue, isSubmitting }) => (
+                  <Form className="space-y-4" noValidate>
+                    <Field label="Full Name" name="name" placeholder="Rahul Sharma"
+                      value={values.name} error={touched.name ? errors.name : undefined}
+                      onChange={handleChange} onBlur={handleBlur} autoComplete="name" />
+                    <Field label="Email Address" name="email" type="email" placeholder="rahul@example.com"
+                      value={values.email} error={touched.email ? errors.email : undefined}
+                      onChange={handleChange} onBlur={handleBlur} autoComplete="email" />
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <div className="flex gap-2">
+                        <div className="flex items-center px-3 rounded-md border bg-muted text-sm font-medium text-muted-foreground">+91</div>
+                        <Input id="phone" name="phone" placeholder="98765 43210" value={values.phone}
+                          inputMode="numeric" maxLength={10} autoComplete="tel-national"
+                          onChange={(e) => setFieldValue("phone", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                          onBlur={handleBlur}
+                          aria-invalid={!!(touched.phone && errors.phone)} />
                       </div>
-                      <p className="text-xs text-muted-foreground">{strength.label}</p>
+                      {touched.phone && errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
                     </div>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Confirm Password</Label>
-                  <Input
-                    type="password"
-                    placeholder="Re-enter password"
-                    value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
-                    required
-                  />
-                  {confirmPassword && confirmPassword !== password && (
-                    <p className="text-xs text-destructive">Passwords don't match</p>
-                  )}
-                </div>
-                <div className="flex items-start gap-2">
-                  <Checkbox id="terms" checked={agreed} onCheckedChange={(v) => setAgreed(v === true)} className="mt-0.5" />
-                  <label htmlFor="terms" className="text-xs text-muted-foreground leading-relaxed">
-                    I agree to the <Link to="/" className="text-primary hover:underline">Terms of Service</Link> and{" "}
-                    <Link to="/" className="text-primary hover:underline">Privacy Policy</Link>
-                  </label>
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Creating account..." : "Create Account"}
-                </Button>
-              </form>
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <PasswordInput id="password" name="password" autoComplete="new-password"
+                        placeholder="Min 8 chars, mix of cases, number, symbol"
+                        value={values.password} onChange={handleChange} onBlur={handleBlur}
+                        invalid={!!(touched.password && errors.password)} />
+                      <PasswordStrengthMeter password={values.password} />
+                      {touched.password && errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirm Password</Label>
+                      <PasswordInput id="confirmPassword" name="confirmPassword" autoComplete="new-password"
+                        placeholder="Re-enter password"
+                        value={values.confirmPassword} onChange={handleChange} onBlur={handleBlur}
+                        invalid={!!(touched.confirmPassword && errors.confirmPassword)} />
+                      {touched.confirmPassword && errors.confirmPassword && (
+                        <p className="text-xs text-destructive">{errors.confirmPassword}</p>
+                      )}
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Checkbox id="acceptTerms" checked={values.acceptTerms}
+                        onCheckedChange={(v) => setFieldValue("acceptTerms", v === true)} className="mt-0.5" />
+                      <label htmlFor="acceptTerms" className="text-xs text-muted-foreground leading-relaxed">
+                        I agree to the <Link to="/terms" className="text-primary hover:underline">Terms of Service</Link> and{" "}
+                        <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
+                      </label>
+                    </div>
+                    {touched.acceptTerms && errors.acceptTerms && (
+                      <p className="text-xs text-destructive">{errors.acceptTerms}</p>
+                    )}
+                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                      {isSubmitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating account...</> : "Create Account"}
+                    </Button>
+                  </Form>
+                )}
+              </Formik>
             </CardContent>
           </Card>
 
@@ -173,6 +150,28 @@ export default function SignupPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+interface FieldProps {
+  label: string;
+  name: string;
+  value: string;
+  error?: string;
+  type?: string;
+  placeholder?: string;
+  autoComplete?: string;
+  onChange: React.ChangeEventHandler<HTMLInputElement>;
+  onBlur: React.FocusEventHandler<HTMLInputElement>;
+}
+function Field({ label, name, value, error, type = "text", placeholder, autoComplete, onChange, onBlur }: FieldProps) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={name}>{label}</Label>
+      <Input id={name} name={name} type={type} placeholder={placeholder} value={value}
+        autoComplete={autoComplete} onChange={onChange} onBlur={onBlur} aria-invalid={!!error} />
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
