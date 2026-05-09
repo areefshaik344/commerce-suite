@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,7 +7,11 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LayoutDashboard, Package, ShoppingCart, Star, DollarSign, Settings, Users, Store, Tag, BarChart3, Image, Ticket, Truck, Archive, ClipboardCheck, Percent, ShieldAlert, FileBarChart, RotateCcw, Upload, Palette, FileText, Mail, Megaphone, LifeBuoy, Activity } from "lucide-react";
 
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
-import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import ProtectedRoute from "@/routes/ProtectedRoute";
+import PublicRoute from "@/routes/PublicRoute";
+import AuthLoader from "@/components/auth/AuthLoader";
+import SessionExpiredDialog from "@/components/auth/SessionExpiredDialog";
+import { useAuthStore } from "@/store/authStore";
 import CustomerLayout from "@/layouts/CustomerLayout";
 import DashboardLayout from "@/layouts/DashboardLayout";
 
@@ -100,6 +104,14 @@ function PageLoader() {
   );
 }
 
+function AuthBootstrapGate({ children }: { children: React.ReactNode }) {
+  const isBootstrapping = useAuthStore((s) => s.isBootstrapping);
+  const bootstrap = useAuthStore((s) => s.bootstrap);
+  useEffect(() => { void bootstrap(); }, [bootstrap]);
+  if (isBootstrapping) return <AuthLoader />;
+  return <>{children}</>;
+}
+
 const vendorNav = [
   { title: "Dashboard", url: "/vendor", icon: LayoutDashboard },
   { title: "Onboarding", url: "/vendor/onboarding", icon: ClipboardCheck },
@@ -147,14 +159,16 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <SessionExpiredDialog />
+          <AuthBootstrapGate>
           <Suspense fallback={<PageLoader />}>
             <Routes>
               {/* Auth - public routes */}
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
+              <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+              <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
               <Route path="/verify-email" element={<EmailVerificationPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+              <Route path="/reset-password" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
               <Route path="/vendor/register" element={<VendorRegisterPage />} />
               <Route path="/vendor/register/success" element={<VendorRegisterSuccessPage />} />
 
@@ -246,6 +260,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
+          </AuthBootstrapGate>
         </BrowserRouter>
       </ErrorBoundary>
     </TooltipProvider>
