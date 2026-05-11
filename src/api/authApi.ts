@@ -34,6 +34,20 @@ interface OtpRecord { code: string; issuedAt: number; purpose: "verify-email" | 
 const otpStore = new Map<string, OtpRecord>();
 const OTP_TTL_MS = 60_000;
 
+// Brute-force protection: 5 attempts per (purpose, target), then a 5-minute lockout.
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_LOCKOUT_MS = 5 * 60_000;
+interface OtpAttempt { count: number; lockedUntil: number; }
+const otpAttempts = new Map<string, OtpAttempt>();
+
+function attemptKey(purpose: string, target: string) {
+  return `${purpose}:${target.toLowerCase()}`;
+}
+function getAttempts(key: string): OtpAttempt {
+  return otpAttempts.get(key) ?? { count: 0, lockedUntil: 0 };
+}
+function resetAttempts(key: string) { otpAttempts.delete(key); }
+
 function generateOtp() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -106,6 +120,14 @@ export const authApi = {
 
   async sendOtp(target: string, purpose: OtpRecord["purpose"]): Promise<ApiResponse<{ sent: boolean; devCode?: string }>> {
     await simulateDelay(400);
+    const key = attemptKey(purpose, target);
+    const a = getAttempts(key);
+    if (a.lockedUntil > Date.now()) {
+      const seconds = Math.ceil((a.lockedUntil - Date.now()) / 1000);
+      throw new ApiError(`Too many attempts. Try again in ${seconds}s.`, 429, "OTP_LOCKED");
+    }
+    // New OTP wipes any previous failed-attempt counter for this target.
+    resetAttempts(key);
     const code = generateOtp();
     otpStore.set(`${purpose}:${target.toLowerCase()}`, { code, issuedAt: Date.now(), purpose, target });
     // Surface the code in dev so reviewers can complete the flow without an email/SMS provider.
@@ -116,14 +138,32 @@ export const authApi = {
   async verifyOtp(target: string, purpose: OtpRecord["purpose"], code: string): Promise<ApiResponse<{ verified: true }>> {
     await simulateDelay(300);
     const key = `${purpose}:${target.toLowerCase()}`;
+    const aKey = attemptKey(purpose, target);
+    const a = getAttempts(aKey);
+    if (a.lockedUntil > Date.now()) {
+      const seconds = Math.ceil((a.lockedUntil - Date.now()) / 1000);
+      throw new ApiError(`Too many failed attempts. Try again in ${seconds}s.`, 429, "OTP_LOCKED");
+    }
     const record = otpStore.get(key);
     if (!record) throw new ApiError("No OTP requested for this address", 400);
     if (Date.now() - record.issuedAt > OTP_TTL_MS) {
       otpStore.delete(key);
+      resetAttempts(aKey);
       throw new ApiError("OTP has expired. Please request a new one.", 410);
     }
-    if (record.code !== code) throw new ApiError("Incorrect OTP. Please try again.", 422);
+    if (record.code !== code) {
+      const next = a.count + 1;
+      if (next >= OTP_MAX_ATTEMPTS) {
+        otpAttempts.set(aKey, { count: next, lockedUntil: Date.now() + OTP_LOCKOUT_MS });
+        otpStore.delete(key);
+        throw new ApiError(`Too many failed attempts. Locked for ${OTP_LOCKOUT_MS / 60000} minutes.`, 429, "OTP_LOCKED");
+      }
+      otpAttempts.set(aKey, { count: next, lockedUntil: 0 });
+      const remaining = OTP_MAX_ATTEMPTS - next;
+      throw new ApiError(`Incorrect OTP. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`, 422, "OTP_INVALID");
+    }
     otpStore.delete(key);
+    resetAttempts(aKey);
     return ok({ verified: true as const }, "Verified");
   },
 
