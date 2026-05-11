@@ -20,6 +20,7 @@ export function useAuth() {
     role: store.currentRole,
     isAuthenticated: store.isAuthenticated,
     isBootstrapping: store.isBootstrapping,
+    isRefreshing: store.isRefreshing,
     isAdmin: store.currentRole === "admin",
     isVendor: store.currentRole === "vendor",
     isCustomer: store.currentRole === "customer",
