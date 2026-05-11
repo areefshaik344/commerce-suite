@@ -8,7 +8,8 @@ export default function SessionExpiredDialog() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    return authEvents.onSessionExpired(() => setOpen(true));
+    const off = authEvents.onSessionExpired(() => setOpen(true));
+    return () => { off(); };
   }, []);
 
   return (

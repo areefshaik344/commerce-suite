@@ -7,8 +7,11 @@
 
 const ACCESS_KEY = "mh.at";
 const REFRESH_KEY = "mh.rt";
+const PERSIST_KEY = "mh.persist"; // "1" => localStorage, "0" => sessionStorage
+const SYNC_KEY = "mh.sync";       // cross-tab broadcast channel via storage event
 
 let memoryAccessToken: string | null = null;
+let persistent = true; // default: remember me on
 
 export interface DecodedToken {
   sub: string;
@@ -59,6 +62,24 @@ export function isExpired(token: string | null, skewSeconds = 0): boolean {
 }
 
 export const tokenStorage = {
+  setPersistent(value: boolean) {
+    persistent = value;
+    try { localStorage.setItem(PERSIST_KEY, value ? "1" : "0"); } catch { /* ignore */ }
+    // If switching to session-only, drop any previously persisted refresh token.
+    if (!value) {
+      try { localStorage.removeItem(REFRESH_KEY); } catch { /* ignore */ }
+    } else {
+      try { sessionStorage.removeItem(REFRESH_KEY); } catch { /* ignore */ }
+    }
+  },
+  isPersistent(): boolean {
+    try {
+      const v = localStorage.getItem(PERSIST_KEY);
+      if (v === "0") persistent = false;
+      else if (v === "1") persistent = true;
+    } catch { /* ignore */ }
+    return persistent;
+  },
   setAccess(token: string | null) {
     memoryAccessToken = token;
     try {
@@ -74,14 +95,25 @@ export const tokenStorage = {
     return memoryAccessToken;
   },
   setRefresh(token: string | null) {
+    const persist = tokenStorage.isPersistent();
     try {
-      if (token) localStorage.setItem(REFRESH_KEY, token);
-      else localStorage.removeItem(REFRESH_KEY);
+      if (token) {
+        if (persist) {
+          localStorage.setItem(REFRESH_KEY, token);
+          sessionStorage.removeItem(REFRESH_KEY);
+        } else {
+          sessionStorage.setItem(REFRESH_KEY, token);
+          localStorage.removeItem(REFRESH_KEY);
+        }
+      } else {
+        localStorage.removeItem(REFRESH_KEY);
+        sessionStorage.removeItem(REFRESH_KEY);
+      }
     } catch { /* ignore */ }
   },
   getRefresh(): string | null {
     try {
-      return localStorage.getItem(REFRESH_KEY);
+      return localStorage.getItem(REFRESH_KEY) || sessionStorage.getItem(REFRESH_KEY);
     } catch {
       return null;
     }
@@ -90,9 +122,20 @@ export const tokenStorage = {
     memoryAccessToken = null;
     try {
       sessionStorage.removeItem(ACCESS_KEY);
+      sessionStorage.removeItem(REFRESH_KEY);
       localStorage.removeItem(REFRESH_KEY);
     } catch { /* ignore */ }
   },
+  /** Broadcast a one-shot auth event to other tabs. */
+  broadcast(event: "login" | "logout" | "refresh") {
+    try {
+      // Set then remove to ensure storage event fires on every call (even with same value).
+      localStorage.setItem(SYNC_KEY, `${event}:${Date.now()}`);
+      localStorage.removeItem(SYNC_KEY);
+    } catch { /* ignore */ }
+  },
+  SYNC_KEY,
+  REFRESH_KEY,
 };
 
 export const TOKEN_TTL = {

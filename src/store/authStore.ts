@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import type { UserRole, User, VendorStatus } from "@/data/mock-users";
 import { mockUsers, mockCredentials } from "@/mocks";
 import { authApi } from "@/api/authApi";
-import { ApiError } from "@/api/apiClient";
+import { ApiError, apiClient, abortAllPending, type RequestConfig } from "@/api/apiClient";
 import {
   decodeToken,
   isExpired,
@@ -31,11 +31,12 @@ interface AuthState {
   currentRole: UserRole;
   isAuthenticated: boolean;
   isBootstrapping: boolean;
+  isRefreshing: boolean;
   vendorApplications: VendorApplication[];
 
   login: (role: UserRole) => void;
-  loginWithCredentials: (email: string, password: string) => Promise<boolean>;
-  loginAsync: (email: string, password: string) => Promise<{ user: User }>;
+  loginWithCredentials: (email: string, password: string, rememberMe?: boolean) => Promise<boolean>;
+  loginAsync: (email: string, password: string, rememberMe?: boolean) => Promise<{ user: User }>;
   signupWithCredentials: (name: string, email: string, phone: string, password: string) => Promise<User>;
   registerVendor: (name: string, email: string, phone: string, password: string, storeName: string, category: string, description: string) => void;
   applyAsVendor: (storeName: string, category: string, description: string) => { success: boolean; message: string };
@@ -48,6 +49,11 @@ interface AuthState {
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let refreshInFlight: Promise<boolean> | null = null;
+/** Requests that 401-failed while a refresh was running — replayed once it succeeds. */
+type Waiter = { resolve: (v: unknown) => void; reject: (e: unknown) => void; cfg: RequestConfig };
+const refreshWaiters: Waiter[] = [];
+let multiTabBound = false;
+let suppressBroadcast = false;
 
 function clearRefreshTimer() {
   if (refreshTimer) {
@@ -68,6 +74,81 @@ function scheduleSilentRefresh(accessToken: string, runRefresh: () => Promise<bo
   refreshTimer = setTimeout(() => { void runRefresh(); }, msUntil);
 }
 
+/* ----------------- API client interceptors ----------------- */
+
+// 1. Inject access token (skipAuth=true bypasses for /auth/* endpoints).
+apiClient.interceptors.request.use((cfg) => {
+  if (cfg.skipAuth) return cfg;
+  const at = tokenStorage.getAccess();
+  if (at) cfg.headers = { ...(cfg.headers || {}), Authorization: `Bearer ${at}` };
+  return cfg;
+});
+
+// 2. On 401, queue request, trigger single refresh, then replay each queued cfg exactly once.
+apiClient.interceptors.error.use(async (err, cfg) => {
+  if (!(err instanceof ApiError) || err.status !== 401) throw err;
+  if (cfg.skipAuthRefresh || cfg._retried) throw err;
+  if (!tokenStorage.getRefresh()) throw err;
+
+  // Queue this request — it will be replayed (or rejected) once refresh resolves.
+  const replay = new Promise((resolve, reject) => {
+    refreshWaiters.push({ resolve, reject, cfg: { ...cfg, _retried: true } });
+  });
+
+  // Kick off (or join) the single in-flight refresh.
+  void useAuthStore.getState().refresh();
+  return replay as Promise<ReturnType<typeof apiClient.request>>;
+});
+
+function flushWaiters(success: boolean, reason?: unknown) {
+  const list = refreshWaiters.splice(0);
+  for (const w of list) {
+    if (success) {
+      apiClient.request(w.cfg).then(w.resolve, w.reject);
+    } else {
+      w.reject(reason ?? new ApiError("Session expired", 401, "REFRESH_FAILED"));
+    }
+  }
+}
+
+/* ----------------- Multi-tab sync ----------------- */
+
+function bindMultiTabSync() {
+  if (multiTabBound || typeof window === "undefined") return;
+  multiTabBound = true;
+  window.addEventListener("storage", (e) => {
+    if (!e.key) return;
+    // Refresh-token slot changed in another tab.
+    if (e.key === tokenStorage.REFRESH_KEY) {
+      if (suppressBroadcast) return;
+      if (e.newValue === null) {
+        // Other tab logged out.
+        clearRefreshTimer();
+        tokenStorage.clear();
+        const wasAuthed = useAuthStore.getState().isAuthenticated;
+        useAuthStore.setState({ currentUser: null, isAuthenticated: false, currentRole: "customer", isRefreshing: false });
+        if (wasAuthed) abortAllPending("multi-tab-logout");
+      } else if (!useAuthStore.getState().isAuthenticated) {
+        // Other tab logged in — restore session here too.
+        void useAuthStore.getState().bootstrap();
+      }
+      return;
+    }
+    // Explicit broadcast channel (covers same-value sets too).
+    if (e.key === tokenStorage.SYNC_KEY && e.newValue) {
+      const [event] = e.newValue.split(":");
+      if (event === "logout") {
+        clearRefreshTimer();
+        tokenStorage.clear();
+        useAuthStore.setState({ currentUser: null, isAuthenticated: false, currentRole: "customer", isRefreshing: false });
+        abortAllPending("multi-tab-logout");
+      } else if (event === "login" && !useAuthStore.getState().isAuthenticated) {
+        void useAuthStore.getState().bootstrap();
+      }
+    }
+  });
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -75,6 +156,7 @@ export const useAuthStore = create<AuthState>()(
       currentRole: "customer",
       isAuthenticated: false,
       isBootstrapping: true,
+      isRefreshing: false,
       vendorApplications: [
         { id: "va-1", userId: "u-4", name: "Anita Singh", email: "anita@example.com", phone: "+91 76543 21098", storeName: "GadgetPro", category: "electronics", description: "Latest gadgets and accessories", status: "pending", appliedDate: "2025-02-20" },
       ],
@@ -90,7 +172,9 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      loginAsync: async (email, password) => {
+      loginAsync: async (email, password, rememberMe = true) => {
+        bindMultiTabSync();
+        tokenStorage.setPersistent(rememberMe);
         const res = await authApi.login({ email, password });
         tokenStorage.setAccess(res.data.accessToken);
         tokenStorage.setRefresh(res.data.refreshToken);
@@ -101,12 +185,13 @@ export const useAuthStore = create<AuthState>()(
           isBootstrapping: false,
         });
         scheduleSilentRefresh(res.data.accessToken, () => useAuthStore.getState().refresh());
+        tokenStorage.broadcast("login");
         return { user: res.data.user };
       },
 
-      loginWithCredentials: async (email, password) => {
+      loginWithCredentials: async (email, password, rememberMe = true) => {
         try {
-          await useAuthStore.getState().loginAsync(email, password);
+          await useAuthStore.getState().loginAsync(email, password, rememberMe);
           return true;
         } catch {
           return false;
@@ -114,6 +199,8 @@ export const useAuthStore = create<AuthState>()(
       },
 
       signupWithCredentials: async (name, email, phone, password) => {
+        bindMultiTabSync();
+        tokenStorage.setPersistent(true);
         const res = await authApi.signup({ name, email, phone, password });
         tokenStorage.setAccess(res.data.accessToken);
         tokenStorage.setRefresh(res.data.refreshToken);
@@ -124,6 +211,7 @@ export const useAuthStore = create<AuthState>()(
           isBootstrapping: false,
         });
         scheduleSilentRefresh(res.data.accessToken, () => useAuthStore.getState().refresh());
+        tokenStorage.broadcast("login");
         return res.data.user;
       },
 
@@ -164,14 +252,21 @@ export const useAuthStore = create<AuthState>()(
 
       logout: async () => {
         clearRefreshTimer();
+        // Cancel everything in flight so no stale state lands after logout.
+        abortAllPending("logout");
+        flushWaiters(false, new ApiError("Logged out", 401, "LOGGED_OUT"));
         const rt = tokenStorage.getRefresh();
         try { await authApi.logout(rt); } catch { /* swallow — clearing locally is sufficient */ }
+        suppressBroadcast = true;
         tokenStorage.clear();
-        set({ currentUser: null, isAuthenticated: false, currentRole: "customer", isBootstrapping: false });
+        suppressBroadcast = false;
+        set({ currentUser: null, isAuthenticated: false, currentRole: "customer", isBootstrapping: false, isRefreshing: false });
+        tokenStorage.broadcast("logout");
       },
 
       refresh: async () => {
         if (refreshInFlight) return refreshInFlight;
+        set({ isRefreshing: true });
         refreshInFlight = (async () => {
           try {
             const rt = tokenStorage.getRefresh();
@@ -179,6 +274,7 @@ export const useAuthStore = create<AuthState>()(
             tokenStorage.setAccess(res.data.accessToken);
             tokenStorage.setRefresh(res.data.refreshToken);
             scheduleSilentRefresh(res.data.accessToken, () => useAuthStore.getState().refresh());
+            flushWaiters(true);
             return true;
           } catch (err) {
             // Refresh failed — clear session and notify UI.
@@ -186,24 +282,33 @@ export const useAuthStore = create<AuthState>()(
             tokenStorage.clear();
             const wasAuthed = useAuthStore.getState().isAuthenticated;
             set({ currentUser: null, isAuthenticated: false, currentRole: "customer" });
+            abortAllPending("refresh-failed");
+            flushWaiters(false, err);
             if (wasAuthed) authEvents.emitSessionExpired();
             return false;
           } finally {
             refreshInFlight = null;
+            set({ isRefreshing: false });
           }
         })();
         return refreshInFlight;
       },
 
       bootstrap: async () => {
+        bindMultiTabSync();
         const access = tokenStorage.getAccess();
         const refreshToken = tokenStorage.getRefresh();
         try {
-          if (access && !isExpired(access)) {
-            const me = await authApi.me(access);
+          // Defensive: reject obviously malformed tokens before hitting the API.
+          if (access && !decodeToken(access)) tokenStorage.setAccess(null);
+          if (refreshToken && !decodeToken(refreshToken)) tokenStorage.setRefresh(null);
+          const safeAccess = tokenStorage.getAccess();
+          const safeRefresh = tokenStorage.getRefresh();
+          if (safeAccess && !isExpired(safeAccess)) {
+            const me = await authApi.me(safeAccess);
             set({ currentUser: me.data, currentRole: me.data.role, isAuthenticated: true });
-            scheduleSilentRefresh(access, () => useAuthStore.getState().refresh());
-          } else if (refreshToken && !isExpired(refreshToken)) {
+            scheduleSilentRefresh(safeAccess, () => useAuthStore.getState().refresh());
+          } else if (safeRefresh && !isExpired(safeRefresh)) {
             const ok = await useAuthStore.getState().refresh();
             if (ok) {
               const me = await authApi.me(tokenStorage.getAccess());
@@ -215,6 +320,11 @@ export const useAuthStore = create<AuthState>()(
           }
         } catch (err) {
           if (err instanceof ApiError && err.status === 401) {
+            tokenStorage.clear();
+            set({ currentUser: null, isAuthenticated: false, currentRole: "customer" });
+          } else {
+            // Unknown failure during bootstrap — fail closed but don't crash the app.
+            console.warn("[auth] bootstrap failed:", err);
             tokenStorage.clear();
             set({ currentUser: null, isAuthenticated: false, currentRole: "customer" });
           }

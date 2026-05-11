@@ -131,8 +131,8 @@ export default function LoginPage() {
                     validationSchema={loginSchema}
                     onSubmit={async (values, { setSubmitting }) => {
                       setGlobalError(null);
-                      try {
-                        await loginAsync(values.email.trim(), values.password);
+                       try {
+                         await loginAsync(values.email.trim(), values.password, values.rememberMe);
                         toast.success("Welcome back!");
                         navigate(from, { replace: true });
                       } catch (err) {
