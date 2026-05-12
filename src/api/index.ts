@@ -8,3 +8,4 @@ export { reviewApi } from "./reviewApi";
 export { notificationApi } from "./notificationApi";
 export { cartApi } from "./cartApi";
 export { wishlistApi } from "./wishlistApi";
+export { profileApi } from "./profileApi";
