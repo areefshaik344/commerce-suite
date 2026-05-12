@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { PasswordInput } from "@/components/auth/PasswordInput";
+import PasswordInput from "@/components/auth/PasswordInput";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 import { changePasswordSchema } from "@/lib/profileValidation";
 import { useProfile } from "@/hooks/useProfile";
