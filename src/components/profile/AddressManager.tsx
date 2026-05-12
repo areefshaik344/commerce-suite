@@ -59,7 +59,7 @@ export function AddressManager() {
         <EmptyState
           icon={MapPin} title="No addresses yet"
           description="Add a delivery address to speed up checkout."
-          action={<Button onClick={onAdd} className="gap-1"><Plus className="h-4 w-4" />Add address</Button>}
+          actionLabel="Add address" onAction={onAdd}
         />
       ) : (
         <>
