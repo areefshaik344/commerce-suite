@@ -2,6 +2,8 @@ export type UserRole = "customer" | "vendor" | "admin";
 
 export type VendorStatus = "none" | "pending" | "approved" | "active" | "rejected";
 
+export type Gender = "male" | "female" | "other" | "prefer_not_to_say" | "";
+
 export interface User {
   id: string;
   name: string;
@@ -13,6 +15,15 @@ export interface User {
   addresses?: Address[];
   isVendor?: boolean;
   vendorStatus?: VendorStatus;
+  gender?: Gender;
+  dob?: string; // YYYY-MM-DD
+  bio?: string;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  preferences?: NotificationPreferences;
+  vendorProfile?: VendorBusinessProfile;
+  passwordChangedAt?: string; // ISO
+  status?: "active" | "deactivated" | "deleted";
 }
 
 export interface Address {
@@ -26,6 +37,61 @@ export interface Address {
   state: string;
   pincode: string;
   isDefault: boolean;
+  type?: "HOME" | "WORK" | "OTHER";
+}
+
+export interface NotificationPreferences {
+  emailOrders: boolean;
+  emailPromotions: boolean;
+  emailNewsletter: boolean;
+  smsOrders: boolean;
+  smsPromotions: boolean;
+  pushOrders: boolean;
+  pushPromotions: boolean;
+  whatsappOrders: boolean;
+  language: "en" | "hi" | "ta" | "te" | "bn";
+  theme: "light" | "dark" | "system";
+  privacyShowProfile: boolean;
+}
+
+export interface BankDetails {
+  accountHolder: string;
+  accountNumberMasked: string; // last4 only on read
+  ifsc: string;
+  bankName: string;
+  branch: string;
+  accountType: "savings" | "current";
+  verified: boolean;
+}
+
+export interface VendorBusinessProfile {
+  vendorId: string;
+  businessName: string;
+  legalName: string;
+  storeSlug: string;
+  supportEmail: string;
+  supportPhone: string;
+  description: string;
+  logo: string;
+  category: string;
+  gstin: string;
+  pan: string;
+  businessAddress: Address;
+  bank: BankDetails;
+  verificationStatus: "unverified" | "pending" | "verified" | "rejected";
+  verifiedAt?: string;
+}
+
+export interface DeviceSession {
+  id: string;
+  device: string;
+  browser: string;
+  os: string;
+  ip: string;
+  location: string;
+  lastActiveAt: string;
+  createdAt: string;
+  current: boolean;
 }
 
 export interface Vendor {
