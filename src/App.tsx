@@ -190,7 +190,7 @@ const App = () => (
                 <Route path="/orders" element={<ProtectedRoute allowedRoles={["customer"]}><OrdersPage /></ProtectedRoute>} />
                 <Route path="/orders/:id" element={<ProtectedRoute allowedRoles={["customer"]}><OrderDetailPage /></ProtectedRoute>} />
                 <Route path="/wishlist" element={<WishlistPage />} />
-                <Route path="/profile" element={<ProtectedRoute allowedRoles={["customer"]}><ProfilePage /></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute allowedRoles={["customer", "vendor", "admin"]}><ProfilePage /></ProtectedRoute>} />
                 <Route path="/notifications" element={<ProtectedRoute allowedRoles={["customer"]}><NotificationsPage /></ProtectedRoute>} />
               </Route>
 
