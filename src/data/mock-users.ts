@@ -1,6 +1,38 @@
 export type UserRole = "customer" | "vendor" | "admin";
 
+/**
+ * Extended role taxonomy. The legacy `UserRole` is kept for back-compat so
+ * existing call-sites compile. New code SHOULD use `AppRole` and the
+ * permission-driven helpers in `@/lib/permissions`.
+ *
+ * IMPORTANT (admin safety): admin / super-admin / support / moderator /
+ * finance accounts MUST be provisioned by the backend only — they are never
+ * creatable from the frontend. The mock users here exist purely so the FE
+ * can be developed against realistic role data.
+ */
+export type AppRole =
+  | "CUSTOMER"
+  | "VENDOR"
+  | "ADMIN"
+  | "SUPER_ADMIN"
+  | "SUPPORT_ADMIN"
+  | "MODERATOR"
+  | "FINANCE_ADMIN";
+
 export type VendorStatus = "none" | "pending" | "approved" | "active" | "rejected";
+
+/**
+ * Account lifecycle states. Drives route guards, UI banners and capability
+ * resolution. Backend should be the source of truth — frontend treats this
+ * field as read-only outside of the dedicated lifecycle endpoints.
+ */
+export type AccountStatus =
+  | "ACTIVE"
+  | "PENDING_VERIFICATION"
+  | "PENDING_VENDOR_APPROVAL"
+  | "SUSPENDED"
+  | "BANNED"
+  | "DEACTIVATED";
 
 export type Gender = "male" | "female" | "other" | "prefer_not_to_say" | "";
 
@@ -15,6 +47,8 @@ export interface User {
   addresses?: Address[];
   isVendor?: boolean;
   vendorStatus?: VendorStatus;
+  /** Free-form rejection reason returned by admin moderation. */
+  vendorRejectionReason?: string;
   gender?: Gender;
   dob?: string; // YYYY-MM-DD
   bio?: string;
@@ -23,7 +57,16 @@ export interface User {
   preferences?: NotificationPreferences;
   vendorProfile?: VendorBusinessProfile;
   passwordChangedAt?: string; // ISO
+  /** Legacy lifecycle field — retained for backward compatibility with existing call-sites. */
   status?: "active" | "deactivated" | "deleted";
+  /** Canonical account lifecycle. Prefer this over `status` in new code. */
+  accountStatus?: AccountStatus;
+  /** Explicit per-user permission overrides. When omitted, role default is used. */
+  permissions?: string[];
+  /** Profile completion checklist surfaced in onboarding UI. */
+  profileCompleted?: boolean;
+  kycSubmitted?: boolean;
+  businessVerified?: boolean;
 }
 
 export interface Address {
