@@ -239,10 +239,11 @@ export const useAuthStore = create<AuthState>()(
           status: "pending",
           appliedDate: new Date().toISOString().split("T")[0],
         };
-        // Update mock user record
+        // Update mock user record. NOTE: role stays CUSTOMER until admin approval —
+        // promoting on apply would bypass the moderation queue (Flipkart-style).
         const idx = mockUsers.findIndex(u => u.id === user.id);
-        if (idx !== -1) mockUsers[idx] = { ...mockUsers[idx], vendorStatus: "pending" };
-        const updatedUser: User = { ...user, vendorStatus: "pending" };
+        if (idx !== -1) mockUsers[idx] = { ...mockUsers[idx], vendorStatus: "pending", accountStatus: "PENDING_VENDOR_APPROVAL", kycSubmitted: true };
+        const updatedUser: User = { ...user, vendorStatus: "pending", accountStatus: "PENDING_VENDOR_APPROVAL", kycSubmitted: true };
         set(s => ({
           currentUser: updatedUser,
           vendorApplications: [...s.vendorApplications, app],
@@ -337,10 +338,10 @@ export const useAuthStore = create<AuthState>()(
         const app = state.vendorApplications.find(a => a.id === appId);
         if (app) {
           const idx = mockUsers.findIndex(u => u.id === app.userId);
-          if (idx !== -1) mockUsers[idx] = { ...mockUsers[idx], role: "vendor", isVendor: true, vendorStatus: "active" };
+          if (idx !== -1) mockUsers[idx] = { ...mockUsers[idx], role: "vendor", isVendor: true, vendorStatus: "active", accountStatus: "ACTIVE", businessVerified: true, vendorRejectionReason: undefined };
         }
         const updatedCurrent = state.currentUser && app && state.currentUser.id === app.userId
-          ? { ...state.currentUser, role: "vendor" as UserRole, isVendor: true, vendorStatus: "active" as VendorStatus }
+          ? { ...state.currentUser, role: "vendor" as UserRole, isVendor: true, vendorStatus: "active" as VendorStatus, accountStatus: "ACTIVE" as const, businessVerified: true, vendorRejectionReason: undefined }
           : state.currentUser;
         return {
           currentUser: updatedCurrent,
@@ -352,10 +353,10 @@ export const useAuthStore = create<AuthState>()(
         const app = state.vendorApplications.find(a => a.id === appId);
         if (app) {
           const idx = mockUsers.findIndex(u => u.id === app.userId);
-          if (idx !== -1) mockUsers[idx] = { ...mockUsers[idx], vendorStatus: "rejected" };
+          if (idx !== -1) mockUsers[idx] = { ...mockUsers[idx], vendorStatus: "rejected", vendorRejectionReason: note, accountStatus: "ACTIVE" };
         }
         const updatedCurrent = state.currentUser && app && state.currentUser.id === app.userId
-          ? { ...state.currentUser, vendorStatus: "rejected" as VendorStatus }
+          ? { ...state.currentUser, vendorStatus: "rejected" as VendorStatus, vendorRejectionReason: note, accountStatus: "ACTIVE" as const }
           : state.currentUser;
         return {
           currentUser: updatedCurrent,
