@@ -1,76 +1,108 @@
-## Production-grade Auth Module (Mock Backend)
+# Product Catalog Module — Implementation Plan
 
-Build a complete, production-shaped auth system on top of the existing marketplace. All flows simulate real network behavior with `{ status, message, data }` envelopes, token lifecycle, role guards, and full UX states. Backend stays mocked — when Spring Boot is ready, only `authApi.ts` swaps.
+Build a production-grade catalog module on top of the existing auth/RBAC/profile architecture. Frontend-first, backend-ready contracts. No redesign of existing modules.
 
-### Architecture
+## Scope
 
-```text
-src/
-├── api/
-│   ├── apiClient.ts          (existing — extend with auth header + 401 handler)
-│   └── authApi.ts            (REWRITE — login/register/otp/refresh/reset)
-├── store/
-│   └── authStore.ts          (REWRITE — tokens, session, hydrate, auto-refresh)
-├── hooks/
-│   ├── useAuth.ts            (REWRITE — typed actions + selectors)
-│   └── useOtpTimer.ts        (NEW — countdown + resend gate)
-├── lib/
-│   ├── tokenStorage.ts       (NEW — namespaced storage, expiry-aware)
-│   ├── passwordStrength.ts   (NEW — zxcvbn-lite scoring)
-│   └── validation.ts         (NEW — Yup schemas)
-├── routes/
-│   ├── ProtectedRoute.tsx    (REWRITE)
-│   ├── PublicRoute.tsx       (NEW)
-│   └── RoleRoute.tsx         (NEW)
-├── components/auth/
-│   ├── OtpInput.tsx          (REWRITE — paste/backspace/auto-focus)
-│   ├── PasswordInput.tsx     (NEW — show/hide)
-│   ├── PasswordStrengthMeter.tsx (NEW)
-│   ├── AuthLoader.tsx        (NEW — full-screen restore spinner)
-│   └── SessionExpiredDialog.tsx (NEW)
-└── pages/auth/
-    ├── LoginPage.tsx         (REWRITE — Formik + Yup)
-    ├── SignupPage.tsx        (REWRITE — Formik + Yup + terms)
-    ├── EmailVerificationPage.tsx (REWRITE — uses useOtpTimer)
-    ├── ForgotPasswordPage.tsx (REWRITE — OTP flow)
-    └── ResetPasswordPage.tsx (REWRITE — strength meter)
+Customer listing/search/PDP, wishlist, recently viewed, vendor product CRUD with ownership, admin moderation pipeline, scalable filter + variant + inventory system.
+
+## Domain Model (`src/types/catalog.ts`)
+
+Normalized entities (additive — keep existing `Product` interface in `mock-products.ts` working):
+
+- `ProductStatus` = `DRAFT | PENDING_REVIEW | APPROVED | REJECTED | ARCHIVED`
+- `Product` — core fields + `status`, `ownerId`, `brandId`, `categoryId`, `attributes`, `defaultVariantId`
+- `ProductVariant` — `{ id, productId, sku, options: Record<string,string>, price, compareAtPrice, mediaIds[], inventoryId }`
+- `Inventory` — `{ id, variantId, stock, lowStockThreshold, reserved, preorder }`
+- `ProductMedia` — `{ id, productId, url, alt, type, position }`
+- `ProductAttribute` — `{ key, label, value }`
+- `Brand`, `Category` (nested via `parentId`)
+- `WishlistItem`, `RecentlyViewedItem`, `ProductReview`
+
+Helpers: `selectVariant(product, options)`, `getInventoryStatus(inv)`, `isOwner(user, product)`.
+
+## API Layer
+
+`api/productApi.ts` (extend):
+- `listProducts(filters, page, pageSize)` with full filter set (category, brand[], priceRange, rating, inStock, discount, attributes, vendorId, status)
+- `getProductBySlug`, `getProductById`
+- `createProduct`, `updateProduct`, `archiveProduct` (ownership-validated server-side stub)
+- `submitForReview`, `moderateProduct(id, action, reason)`
+- `getVendorProducts(vendorId, filters)`
+- `getModerationQueue(filters)`
+- Extend `searchSuggestions` with brand/category hits
+
+`api/categoryApi.ts` (new): `getCategoryTree`, `getCategoryBySlug`, `getBreadcrumbs(slug)`
+
+`api/wishlistApi.ts` (extend): persisted stub, optimistic returns
+
+All responses use the existing `ApiResponse<T>` / `PaginatedResponse<T>` envelope. Simulated 2% random failure on writes to exercise retry paths.
+
+## State Layer (Zustand)
+
+- `store/productStore.ts` — listing cache, current product, vendor/admin queues, loading + error states, memoized selectors
+- `store/categoryStore.ts` — tree + flat map, bootstrap once
+- `store/wishlistStore.ts` (extend) — auth-aware, optimistic add/remove with rollback, dedupe
+- `store/recentlyViewedStore.ts` (new) — capped at 20, dedupe, persisted, user-scoped key
+
+## Hooks
+
+- `useProducts` — listing + pagination with URL sync (`?page=X`)
+- `useProductFilters` — URL-synced filters, debounced 300ms, serialization
+- `useWishlist` — guards unauth → login redirect with intent
+- `useRecentlyViewed` — tracks PDP visits
+- `useProductForm` — Formik+Yup for vendor create/edit with variant management
+
+## Components (`src/components/product/`)
+
+Atomic, composable, memoized where it matters:
+- `ProductCard`, `ProductGrid`, `ProductFilters` (sidebar + mobile Sheet), `ProductSortBar`
+- `ProductGallery` (thumbnails + zoom hover), `ProductVariantSelector` (disables unavailable combos)
+- `ProductPriceBlock`, `InventoryBadge`, `WishlistButton`
+- `ReviewList`, `RatingSummary` (reuse existing `WriteReviewForm`)
+- `ProductSearchBar` (debounced, suggestions, recent + trending)
+- `Breadcrumbs`, `EmptyProductState`, `ProductSkeleton`
+- `ProductModerationActions` (admin approve/reject with reason)
+- `VendorProductTable` (status chips, ownership filter)
+
+## Pages
+
+- `pages/customer/ProductsPage.tsx` — refactor for new filter system, keep URL pagination
+- `pages/customer/ProductDetailPage.tsx` — refactor to use variants, gallery, related, recently-viewed
+- `pages/vendor/VendorProducts.tsx` — table with moderation status
+- `pages/vendor/VendorProductForm.tsx` — full variant editor, media manager, submit for review
+- `pages/vendor/VendorProductEdit.tsx` — wraps form with ownership guard
+- `pages/admin/AdminProducts.tsx` — moderation queue with bulk actions
+- `pages/admin/AdminProductDetail.tsx` — approve/reject panel
+
+## RBAC Integration
+
+Use existing `<Can>`, `usePermissions`, `PermissionRoute`. Permissions: `MANAGE_PRODUCTS` (vendor, scoped via `ownsResource`), `MODERATE_PRODUCTS` (admin). No inline role strings.
+
+## URL Sync Contract
+
+```
+/products?page=2&category=electronics&brand=Apple,Samsung
+        &minPrice=1000&maxPrice=50000&rating=4&inStock=1
+        &sort=price-asc&q=phone&attr.color=Black
 ```
 
-### Features delivered
+Filter hook reads/writes via `useSearchParams`, debounced 300ms. Active chips individually removable.
 
-- **Auth core**: login, register, logout, session restore on refresh via `AuthLoader` boot gate.
-- **OTP**: 6-box input, auto-focus, backspace nav, paste support, 60s expiry timer, resend disabled until expiry, expired/invalid OTP errors.
-- **Password**: forgot → OTP → reset flow, show/hide toggle, real-time strength meter (Weak/Fair/Good/Strong), Yup rules (min 8, upper, lower, digit, symbol).
-- **Tokens (simulated, prod-shaped)**:
-  - Access token (15 min) + refresh token (7 days), JWT-like base64 payload with `exp`.
-  - `tokenStorage.ts` keeps refresh in storage, access in-memory + sessionStorage fallback (mitigates naive localStorage XSS surface for the access token while keeping refresh portable).
-  - `apiClient` interceptor: on 401 → call `refresh()`; on refresh failure → logout + show "Session expired".
-  - Background timer schedules silent refresh ~60s before access expiry.
-- **Roles**: `USER | ADMIN | VENDOR` (mapped from existing `customer/vendor/admin`). `RoleRoute` enforces; `useAuth` exposes `is(role)`.
-- **Guards**: `ProtectedRoute` (redirects to `/login` with `from`), `PublicRoute` (logged-in users bounced to their dashboard), `RoleRoute` (403-style redirect).
-- **API simulation**: every call returns `{ status: 'success'|'error', message, data }`, 300–700ms delay, scripted errors for invalid creds, wrong OTP, expired OTP, email-in-use, weak password.
-- **UX**: toast notifications (sonner), inline field errors, loading buttons, error banners, session-expired modal.
+## Performance
 
-### Validation (Yup)
+- `React.memo` on cards and variant option buttons
+- `useMemo`/`useCallback` on expensive selectors
+- `loading="lazy"` + `decoding="async"` on images
+- Skeleton placeholders for grid + PDP
+- List structure ready for `@tanstack/react-virtual` (already noted in production-gaps memory)
 
-- Email: required, valid format.
-- Password: 8+ chars, 1 upper, 1 lower, 1 digit, 1 symbol.
-- Confirm password: match.
-- Terms: must be true on signup.
-- OTP: exactly 6 digits.
+## Not Touching
 
-### Backwards compatibility
+- Auth, RBAC primitives, profile, account lifecycle
+- Cart/checkout/order
+- Existing shared `ProductCard` callers — new `components/product/ProductCard` becomes canonical; old shared file re-exports it for compatibility
 
-- Keeps existing `customer/vendor/admin` role values (UI uppercase labels only) so vendor onboarding, admin pages, cart, etc. keep working without churn.
-- Demo credentials still functional (rahul@example.com / priya@vendor.com / admin@marketplace.com / `password`).
-- `useAuth` retains existing surface (`user`, `role`, `isAuthenticated`, `login`, `logout`, `applyAsVendor`, vendor application actions) plus new methods.
+## Deliverable
 
-### Out of scope
-
-- Real backend, real JWT signing, real email/SMS — all simulated.
-- 2FA beyond email OTP.
-- OAuth (Google/Apple) — not requested.
-
-### Deliverables
-
-All files above written end-to-end, wired into `App.tsx` routes, no pseudocode. After implementation I'll smoke-test the build and confirm flows compile.
+All listed files created or refactored, wired into the App router where pages already exist, TypeScript strict, no console errors, preview verified.
