@@ -4,6 +4,7 @@ import { mockReviews } from "@/mocks";
 import type { Product, Category } from "@/data/mock-products";
 import type { Review } from "@/data/mock-orders";
 import { PRODUCT_STATUS, type ProductStatus } from "@/types/catalog";
+import { assertOwnership, canEditProduct, canSubmitForReview } from "@/lib/productOwnership";
 
 /**
  * Mutable moderation/status overlay keyed by product id. The mock dataset
@@ -198,7 +199,9 @@ export const productApi = {
     const list = vendorDrafts.some((p) => p.id === id) ? vendorDrafts : mockProducts;
     const idx = list.findIndex((p) => p.id === id);
     if (idx < 0) throw new Error("Product not found");
-    if (list[idx].vendorId !== ownerId) throw new Error("You don't own this product");
+    if (!canEditProduct({ vendorId: list[idx].vendorId, status: statusOf(id) }, ownerId)) {
+      throw new Error("Product is not editable in its current state");
+    }
     list[idx] = { ...list[idx], ...patch };
     return mockSuccess(list[idx], "Product updated");
   },
@@ -207,7 +210,7 @@ export const productApi = {
     await simulateDelay(250);
     const product = allProducts().find((p) => p.id === id);
     if (!product) throw new Error("Product not found");
-    if (product.vendorId !== ownerId) throw new Error("You don't own this product");
+    assertOwnership({ vendorId: product.vendorId }, ownerId);
     productOverrides[id] = { ...productOverrides[id], status: PRODUCT_STATUS.ARCHIVED };
     return mockSuccess({ id }, "Product archived");
   },
@@ -216,7 +219,10 @@ export const productApi = {
     await simulateDelay(250);
     const product = allProducts().find((p) => p.id === id);
     if (!product) throw new Error("Product not found");
-    if (product.vendorId !== ownerId) throw new Error("You don't own this product");
+    assertOwnership({ vendorId: product.vendorId }, ownerId);
+    if (!canSubmitForReview(statusOf(id))) {
+      throw new Error("Only DRAFT or REJECTED products can be submitted for review");
+    }
     productOverrides[id] = { ...productOverrides[id], status: PRODUCT_STATUS.PENDING_REVIEW };
     return mockSuccess({ id, status: PRODUCT_STATUS.PENDING_REVIEW }, "Submitted for review");
   },
