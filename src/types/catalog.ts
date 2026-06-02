@@ -164,6 +164,31 @@ export function isOwner(userId: string | undefined, product: Pick<CatalogProduct
   return !!userId && userId === product.ownerId;
 }
 
+/* ----------------------- Inventory helpers ----------------------- */
+
+/** Pre-checkout reservation snapshot — used by cart/checkout planning. */
+export interface InventoryReservation {
+  variantId: string;
+  quantity: number;
+  expiresAt: string;
+}
+
+/** Stock physically available right now (stock - reserved, clamped to 0). */
+export function availableStock(inv: Inventory | undefined | null): number {
+  if (!inv) return 0;
+  return Math.max(0, inv.stock - inv.reserved);
+}
+
+/** Apply a pending reservation in-memory (returns a NEW Inventory record). */
+export function applyReservation(inv: Inventory, quantity: number): Inventory {
+  return { ...inv, reserved: Math.min(inv.stock, inv.reserved + Math.max(0, quantity)) };
+}
+
+/** Release a reservation in-memory (returns a NEW Inventory record). */
+export function releaseReservation(inv: Inventory, quantity: number): Inventory {
+  return { ...inv, reserved: Math.max(0, inv.reserved - Math.max(0, quantity)) };
+}
+
 /* ----------------------- Legacy adapter ----------------------- */
 
 /**
