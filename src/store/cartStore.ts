@@ -41,11 +41,7 @@ interface CartState {
   /** Marks lines unavailable / clamps quantities after server validation. */
   reconcileAvailability: (changes: { lineId: string; available?: boolean; clampTo?: number }[]) => void;
 
-  /* ---------------- Legacy back-compat surface ---------------- */
-  /** @deprecated use `items` */
-  cart: CartItem[];
-  /** @deprecated use `saved` */
-  savedForLater: SavedCartItem[];
+  /* ---------------- Legacy back-compat surface (action aliases) ---------------- */
   /** @deprecated use `addItem` */
   addToCart: (product: Product, quantity?: number, variants?: Record<string, string>) => void;
   /** @deprecated use `removeItem(lineId)` */
@@ -164,8 +160,6 @@ export const useCartStore = create<CartState>()(
       },
 
       /* ---------------- Legacy adapters ---------------- */
-      get cart() { return get().items; },
-      get savedForLater() { return get().saved; },
       addToCart: (product, quantity = 1, variants) => {
         get().addItem(product, quantity, variantFromMap(product.id, variants));
       },
