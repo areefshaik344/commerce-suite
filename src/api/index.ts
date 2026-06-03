@@ -7,5 +7,7 @@ export { adminApi } from "./adminApi";
 export { reviewApi } from "./reviewApi";
 export { notificationApi } from "./notificationApi";
 export { cartApi } from "./cartApi";
+export { couponApi } from "./couponApi";
+export { checkoutApi } from "./checkoutApi";
 export { wishlistApi } from "./wishlistApi";
 export { profileApi } from "./profileApi";

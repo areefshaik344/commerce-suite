@@ -31,8 +31,8 @@ export function useStore() {
     rejectVendor: auth.rejectVendor,
 
     // Cart
-    cart: cart.cart,
-    savedForLater: cart.savedForLater,
+    cart: cart.items,
+    savedForLater: cart.saved,
     addToCart: cart.addToCart,
     removeFromCart: cart.removeFromCart,
     updateCartQuantity: cart.updateCartQuantity,
