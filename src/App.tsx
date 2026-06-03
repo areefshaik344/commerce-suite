@@ -30,6 +30,8 @@ const ProductDetailPage = lazy(() => import("@/pages/customer/ProductDetailPage"
 const CartPage = lazy(() => import("@/pages/customer/CartPage"));
 const CheckoutPage = lazy(() => import("@/pages/customer/CheckoutPage"));
 const OrderSuccessPage = lazy(() => import("@/pages/customer/OrderSuccessPage"));
+const CheckoutSuccessPage = lazy(() => import("@/pages/customer/CheckoutSuccessPage"));
+const CheckoutFailurePage = lazy(() => import("@/pages/customer/CheckoutFailurePage"));
 const OrdersPage = lazy(() => import("@/pages/customer/OrdersPage"));
 const OrderDetailPage = lazy(() => import("@/pages/customer/OrderDetailPage"));
 const WishlistPage = lazy(() => import("@/pages/customer/WishlistPage"));
@@ -187,6 +189,8 @@ const App = () => (
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/checkout" element={<ProtectedRoute allowedRoles={["customer"]}><CheckoutPage /></ProtectedRoute>} />
                 <Route path="/order-success" element={<ProtectedRoute allowedRoles={["customer"]}><OrderSuccessPage /></ProtectedRoute>} />
+                <Route path="/checkout/success" element={<ProtectedRoute allowedRoles={["customer"]}><CheckoutSuccessPage /></ProtectedRoute>} />
+                <Route path="/checkout/failure" element={<ProtectedRoute allowedRoles={["customer"]}><CheckoutFailurePage /></ProtectedRoute>} />
                 <Route path="/orders" element={<ProtectedRoute allowedRoles={["customer"]}><OrdersPage /></ProtectedRoute>} />
                 <Route path="/orders/:id" element={<ProtectedRoute allowedRoles={["customer"]}><OrderDetailPage /></ProtectedRoute>} />
                 <Route path="/wishlist" element={<WishlistPage />} />
