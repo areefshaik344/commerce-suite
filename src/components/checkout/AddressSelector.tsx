@@ -11,7 +11,7 @@ interface Props {
   addresses: Address[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onAdd?: (addr: Omit<Address, "id">) => Promise<void> | void;
+  onAdd?: (addr: Address) => Promise<void> | void;
 }
 
 export function AddressSelector({ addresses, selectedId, onSelect, onAdd }: Props) {
