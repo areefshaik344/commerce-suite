@@ -30,7 +30,7 @@ function adapt(o: LegacyOrder): OrderRecord {
   const vendor = mockVendors.find(v => v.id === o.vendorId);
   const vendorSnap: VendorSnapshot = {
     vendorId: o.vendorId,
-    vendorName: vendor?.businessName ?? vendor?.name ?? "Seller",
+    vendorName: vendor?.storeName ?? "Seller",
   };
   const items: OrderItem[] = o.items.map((it, idx) => {
     const productSnap: ProductSnapshot = {
