@@ -11,3 +11,7 @@ export { couponApi } from "./couponApi";
 export { checkoutApi } from "./checkoutApi";
 export { wishlistApi } from "./wishlistApi";
 export { profileApi } from "./profileApi";
+export { orderManagementApi } from "./orderManagementApi";
+export { shipmentApi } from "./shipmentApi";
+export { returnApi } from "./returnApi";
+export { refundApi } from "./refundApi";
