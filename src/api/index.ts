@@ -15,3 +15,6 @@ export { orderManagementApi } from "./orderManagementApi";
 export { shipmentApi } from "./shipmentApi";
 export { returnApi } from "./returnApi";
 export { refundApi } from "./refundApi";
+export { shippingApi } from "./shippingApi";
+export { paymentApi } from "./paymentApi";
+export { invoiceApi } from "./invoiceApi";
