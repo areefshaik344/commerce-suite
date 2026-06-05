@@ -39,6 +39,8 @@ const ProfilePage = lazy(() => import("@/pages/customer/ProfilePage"));
 const NotificationsPage = lazy(() => import("@/pages/customer/NotificationsPage"));
 const VendorStorePage = lazy(() => import("@/pages/customer/VendorStorePage"));
 const ComparePage = lazy(() => import("@/pages/customer/ComparePage"));
+const ShipmentTrackingPage = lazy(() => import("@/pages/customer/ShipmentTrackingPage"));
+const PaymentStatusPage = lazy(() => import("@/pages/customer/PaymentStatusPage"));
 
 const AboutPage = lazy(() => import("@/pages/static/AboutPage"));
 const ContactPage = lazy(() => import("@/pages/static/ContactPage"));
@@ -196,6 +198,8 @@ const App = () => (
                 <Route path="/wishlist" element={<WishlistPage />} />
                 <Route path="/profile" element={<ProtectedRoute allowedRoles={["customer", "vendor", "admin"]}><ProfilePage /></ProtectedRoute>} />
                 <Route path="/notifications" element={<ProtectedRoute allowedRoles={["customer"]}><NotificationsPage /></ProtectedRoute>} />
+                <Route path="/tracking/:id" element={<ProtectedRoute allowedRoles={["customer", "vendor", "admin"]}><ShipmentTrackingPage /></ProtectedRoute>} />
+                <Route path="/payments/:id" element={<ProtectedRoute allowedRoles={["customer", "vendor", "admin"]}><PaymentStatusPage /></ProtectedRoute>} />
               </Route>
 
               {/* Vendor - protected */}

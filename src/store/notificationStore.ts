@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type {
+  NotificationEvent, NotificationPreference, NotificationCategory,
+} from "@/types/notification";
+import { DEFAULT_PREFERENCE_MATRIX } from "@/types/notification";
+import { notificationApi } from "@/api/notificationApi";
 
+/* ---------------- Legacy in-app notification shape (kept stable) -------- */
 export type NotificationType = "order" | "promo" | "delivery" | "review" | "system" | "vendor" | "admin";
 
 export interface Notification {
@@ -15,12 +21,33 @@ export interface Notification {
 
 interface NotificationState {
   notifications: Notification[];
+
+  /** New event-based feed (paginated, server-backed). */
+  events: NotificationEvent[];
+  eventsTotal: number;
+  eventsPage: number;
+  eventsPageSize: number;
+  loadingEvents: boolean;
+
+  /** Preferences cache, keyed by userId. */
+  preferenceByUser: Record<string, NotificationPreference>;
+  loadingPrefs: boolean;
+
   addNotification: (n: Omit<Notification, "id" | "timestamp" | "read">) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   removeNotification: (id: string) => void;
   clearAll: () => void;
   unreadCount: () => number;
+
+  fetchEvents: (userId: string, opts?: { page?: number; pageSize?: number; category?: NotificationCategory }) => Promise<NotificationEvent[]>;
+  markEventRead: (eventId: string) => Promise<void>;
+  markAllEventsRead: (userId: string) => Promise<void>;
+  unreadEventCount: () => number;
+
+  fetchPreferences: (userId: string) => Promise<NotificationPreference>;
+  updatePreferences: (userId: string, patch: Partial<NotificationPreference> & { matrix?: NotificationPreference["matrix"] }) => Promise<NotificationPreference>;
+  preferenceFor: (userId: string) => NotificationPreference;
 }
 
 const initialNotifications: Notification[] = [
@@ -38,32 +65,75 @@ export const useNotificationStore = create<NotificationState>()(
   persist(
     (set, get) => ({
       notifications: initialNotifications,
+      events: [],
+      eventsTotal: 0,
+      eventsPage: 1,
+      eventsPageSize: 20,
+      loadingEvents: false,
+      preferenceByUser: {},
+      loadingPrefs: false,
 
       addNotification: (n) => {
-        const notification: Notification = {
-          ...n,
-          id: `n-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          read: false,
-        };
+        const notification: Notification = { ...n, id: `n-${Date.now()}`, timestamp: new Date().toISOString(), read: false };
         set({ notifications: [notification, ...get().notifications] });
       },
-
-      markAsRead: (id) => set({
-        notifications: get().notifications.map(n => n.id === id ? { ...n, read: true } : n),
-      }),
-
-      markAllAsRead: () => set({
-        notifications: get().notifications.map(n => ({ ...n, read: true })),
-      }),
-
-      removeNotification: (id) => set({
-        notifications: get().notifications.filter(n => n.id !== id),
-      }),
-
+      markAsRead: (id) => set({ notifications: get().notifications.map(n => n.id === id ? { ...n, read: true } : n) }),
+      markAllAsRead: () => set({ notifications: get().notifications.map(n => ({ ...n, read: true })) }),
+      removeNotification: (id) => set({ notifications: get().notifications.filter(n => n.id !== id) }),
       clearAll: () => set({ notifications: [] }),
-
       unreadCount: () => get().notifications.filter(n => !n.read).length,
+
+      async fetchEvents(userId, opts) {
+        set({ loadingEvents: true });
+        try {
+          const res = await notificationApi.listEvents({ userId, ...opts });
+          set({
+            events: res.data.items,
+            eventsTotal: res.data.total,
+            eventsPage: res.data.page,
+            eventsPageSize: res.data.pageSize,
+            loadingEvents: false,
+          });
+          return res.data.items;
+        } catch {
+          set({ loadingEvents: false });
+          return [];
+        }
+      },
+
+      async markEventRead(eventId) {
+        await notificationApi.markEventRead(eventId);
+        set({ events: get().events.map(e => e.id === eventId ? { ...e, read: true } : e) });
+      },
+
+      async markAllEventsRead(userId) {
+        await notificationApi.markAllEventsRead(userId);
+        set({ events: get().events.map(e => ({ ...e, read: true })) });
+      },
+
+      unreadEventCount: () => get().events.filter(e => !e.read).length,
+
+      async fetchPreferences(userId) {
+        set({ loadingPrefs: true });
+        const res = await notificationApi.getPreferences(userId);
+        set(s => ({ preferenceByUser: { ...s.preferenceByUser, [userId]: res.data }, loadingPrefs: false }));
+        return res.data;
+      },
+
+      async updatePreferences(userId, patch) {
+        const res = await notificationApi.updatePreferences(userId, patch);
+        set(s => ({ preferenceByUser: { ...s.preferenceByUser, [userId]: res.data } }));
+        return res.data;
+      },
+
+      preferenceFor(userId) {
+        return get().preferenceByUser[userId] ?? {
+          userId,
+          matrix: structuredClone(DEFAULT_PREFERENCE_MATRIX),
+          marketingOptIn: false,
+          updatedAt: new Date().toISOString(),
+        };
+      },
     }),
     {
       name: "markethub-notifications",
