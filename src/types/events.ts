@@ -166,9 +166,7 @@ export interface WebhookEventDTO<T extends DomainEventType = DomainEventType> {
 }
 
 /** Convert an in-process envelope to the webhook delivery DTO. */
-export function toWebhookDTO<T extends DomainEventType>(
-  ev: DomainEventMap[T]
-): WebhookEventDTO<T> {
+export function toWebhookDTO(ev: AnyDomainEvent): WebhookEventDTO {
   return {
     id: ev.id,
     type: ev.type,
@@ -178,5 +176,5 @@ export function toWebhookDTO<T extends DomainEventType>(
     correlationId: ev.correlationId,
     actor: ev.actor,
     data: ev.payload,
-  };
+  } as WebhookEventDTO;
 }
