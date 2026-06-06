@@ -18,3 +18,4 @@ export { refundApi } from "./refundApi";
 export { shippingApi } from "./shippingApi";
 export { paymentApi } from "./paymentApi";
 export { invoiceApi } from "./invoiceApi";
+export { auditApi } from "./auditApi";
