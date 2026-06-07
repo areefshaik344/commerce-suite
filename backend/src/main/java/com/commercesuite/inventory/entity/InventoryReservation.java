@@ -7,8 +7,6 @@ import java.util.UUID;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
 @Entity
@@ -16,8 +14,7 @@ import org.hibernate.type.SqlTypes;
 @Getter @Setter
 @NoArgsConstructor
 @SuperBuilder
-@SQLDelete(sql = "UPDATE inventory_reservations SET deleted_at = now(), updated_at = now() WHERE id = ? AND version = ?")
-@SQLRestriction("deleted_at IS NULL")
+// Reservation FSM audit — append-only. NO @SQLDelete (MEDIUM M-09).
 public class InventoryReservation extends AuditableEntity {
 
     @Column(name = "variant_id", nullable = false) @JdbcTypeCode(SqlTypes.UUID) private UUID variantId;
