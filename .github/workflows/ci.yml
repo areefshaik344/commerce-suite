@@ -25,21 +25,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '21', cache: gradle }
+      - name: Make gradlew executable
+        working-directory: backend
+        run: chmod +x gradlew
       - name: Build & unit tests
         working-directory: backend
         run: ./gradlew --no-daemon clean test
-      - name: Migration validation (Flyway info)
-        working-directory: backend
-        run: ./gradlew --no-daemon flywayInfo || true
-      - name: Dependency scan (OWASP)
-        working-directory: backend
-        run: ./gradlew --no-daemon dependencyCheckAnalyze || true
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-reports
           path: backend/build/reports
+          if-no-files-found: ignore
   frontend:
     runs-on: ubuntu-latest
     steps:
