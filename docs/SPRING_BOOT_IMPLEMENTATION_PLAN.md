@@ -641,3 +641,15 @@ Assumes 2 backend engineers + 1 SRE + 0.5 QA. Each week ends green on CI, deploy
 - Readiness scoring & blockers: `docs/BACKEND_READINESS.md`
 - FSM source (transition tables to mirror server-side): `src/lib/fsm.ts`
 - Actor/idempotency/request-id contracts: `src/types/actor.ts`, `src/lib/idempotency.ts`, `src/lib/requestId.ts`
+---
+
+## Phase 1 Hardening Addendum
+
+The original Phase 1 deliverables are extended (no new business features) with the following baseline that every later phase MUST adopt:
+
+1. **Persistence base classes** — every JPA entity extends `BaseEntity` (UUID id, `@Version`) and, when audit columns are required, `AuditableEntity` (audit + soft-delete). Phase ≥ 2 entities are not allowed to redeclare these fields.
+2. **JPA auditing** — `@EnableJpaAuditing` is bootstrapped by `JpaAuditingConfig`; `AuditorAware<UUID>` reads from `ActorContextHolder.current()`. Services MUST NOT set `createdAt`/`updatedAt`/`createdBy`/`updatedBy` by hand.
+3. **Clock injection** — domain services MUST inject `java.time.Clock` and call `Instant.now(clock)`. Direct `Instant.now()` is forbidden in domain code (allowed only in logging/diagnostic envelopes).
+4. **Secrets** — `JWT_SECRET` is mandatory at startup; no default. The same rule applies to every later secret (payment, webhook signing, S3 keys).
+5. **Soft delete strategy** — for any entity holding user data, declare `@SQLDelete` + `@SQLRestriction("deleted_at IS NULL")`. Hard deletes are reserved for purge jobs and require an explicit native query.
+6. **Test baseline** — every controller phase MUST ship at minimum: one happy-path controller IT, one security/RBAC IT, and one negative-path validation IT, all running on Testcontainers Postgres.
