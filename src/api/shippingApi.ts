@@ -11,7 +11,9 @@ import { mockOrderRecords } from "@/mocks/mockOrderRecords";
 import { httpClient, USE_REAL_API } from "./httpClient";
 import {
   shipmentFromBackend, isUuid,
+  shipmentFromStorefront,
   type BackendShipmentDto, type BackendTrackingEventDto,
+  type StorefrontShipmentSummaryDto,
 } from "./orderAdapter";
 
 let ORDERS: OrderRecord[] = mockOrderRecords;
@@ -71,15 +73,18 @@ export const shippingApi = {
 
   async getShipmentDetail(shipmentId: string): Promise<ApiResponse<ShipmentDetail>> {
     if (USE_REAL_API && isUuid(shipmentId)) {
-      const [s, ev] = await Promise.all([
-        httpClient.get<BackendShipmentDto>(`/shipments/${shipmentId}`),
-        httpClient.get<BackendTrackingEventDto[]>(`/shipments/${shipmentId}/tracking-events`),
-      ]);
-      const shipment = shipmentFromBackend(s.data);
-      const events: TrackingEvent[] = ev.data.map(e => ({
-        id: e.id, shipmentId: e.shipmentId, legId: null,
-        type: "DEPARTED_HUB", status: shipment.status as unknown as FulfillmentStatus,
-        location: e.location ?? undefined, note: e.description ?? undefined, at: e.occurredAt,
+      // Storefront read-model: single round-trip with embedded carrier + events.
+      const res = await httpClient.get<StorefrontShipmentSummaryDto>(`/storefront/shipments/${shipmentId}`);
+      const shipment = shipmentFromStorefront(res.data, "");
+      const events: TrackingEvent[] = res.data.events.map((e, idx) => ({
+        id: `${shipmentId}-ev-${idx}`,
+        shipmentId,
+        legId: null,
+        type: (e.type as TrackingEvent["type"]) ?? "DEPARTED_HUB",
+        status: shipment.status as unknown as FulfillmentStatus,
+        location: e.location ?? undefined,
+        note: e.description ?? undefined,
+        at: e.occurredAt,
       }));
       return mockSuccess({
         shipment, packages: [], legs: [], events,
