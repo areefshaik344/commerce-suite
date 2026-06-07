@@ -48,7 +48,7 @@ public class PricingEngine {
         return s;
     }
 
-    long computeCouponDiscount(Coupon coupon, long subtotal) {
+    public long computeCouponDiscount(Coupon coupon, long subtotal) {
         if (coupon == null) return 0L;
         return switch (coupon.getType()) {
             case FREE_SHIPPING -> 0L;
