@@ -178,7 +178,7 @@ const EMPTY_ADDRESS: OrderShippingAddressSnapshot = {
   addressLine1: "",
   addressLine2: "",
   landmark: "",
-  type: "home",
+  type: "HOME",
   isDefault: false,
   capturedAt: new Date(0).toISOString(),
 };
@@ -246,6 +246,7 @@ export function orderFromBackend(o: BackendOrderDto): OrderRecord {
       vendorName: v.vendor.vendorName,
       subtotal: v.subtotal, discount: v.discount, shipping: v.shipping,
       tax: v.tax, total: v.total,
+      itemCount: v.itemIds.length,
     })),
   };
 
