@@ -9,4 +9,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface RefundRequestRepository extends JpaRepository<RefundRequest, UUID> {
   Page<RefundRequest> findAll(Pageable pageable);
   List<RefundRequest> findByOrderId(UUID orderId);
+  List<RefundRequest> findByVendorOrderId(UUID vendorOrderId);
 }
