@@ -120,3 +120,12 @@ Out of Phase 2 scope (still pending): file storage for documents, penny-drop ban
 - `CheckoutSweeperService` (Spring `@Scheduled`) expires stale sessions and releases reservations as `ABANDONED`.
 - Idempotency on `POST /checkout/start` and `POST /checkout/cancel` via `Idempotency-Key` header (PAYMENT_IDEMPOTENCY.md key shape).
 - Migration `V009__cart_checkout_module.sql`. Docs: `docs/CART_CHECKOUT_MODULE.md`.
+
+## Phase 6 — Orders / Shipping / Returns / Refunds ✅
+- Migration `V010__orders_shipping_returns_refunds.sql` adds 11 tables.
+- Parent-Order / Vendor-Order split with deterministic rollup (`OrderRollupService`).
+- Reservation commit wired via `InventoryReservationService.commitBySystem` (RESERVATION_FSM.md compliant).
+- Customer / Vendor / Admin API surfaces under `/api/v1/orders`, `/api/v1/vendor/orders`, `/api/v1/shipments`, `/api/v1/returns`, `/api/v1/admin/*`.
+- Immutable snapshots (address, vendor, product, pricing) stored as JSONB on creation.
+- 5 FSMs (Order, VendorOrder, Shipment, Return, Refund) with server-enforced transitions.
+- See `docs/ORDERS_SHIPPING_MODULE.md`.
