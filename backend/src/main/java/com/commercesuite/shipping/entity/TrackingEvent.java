@@ -6,13 +6,10 @@ import java.util.UUID;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
+/** Append-only tracking audit. NO @SQLDelete (LOW L-02). */
 @Entity @Table(name="tracking_events") @Getter @Setter @NoArgsConstructor @SuperBuilder
-@SQLDelete(sql="UPDATE tracking_events SET deleted_at=now(), updated_at=now() WHERE id=? AND version=?")
-@SQLRestriction("deleted_at IS NULL")
 public class TrackingEvent extends AuditableEntity {
   @Column(name="shipment_id", nullable=false) @JdbcTypeCode(SqlTypes.UUID) private UUID shipmentId;
   @Column(name="event_type",  nullable=false, length=64) private String eventType;

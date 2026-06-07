@@ -5,13 +5,10 @@ import java.util.UUID;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
+/** Financial record — append-only. NO @SQLDelete (BLOCKER B-05). */
 @Entity @Table(name="return_items") @Getter @Setter @NoArgsConstructor @SuperBuilder
-@SQLDelete(sql="UPDATE return_items SET deleted_at=now(), updated_at=now() WHERE id=? AND version=?")
-@SQLRestriction("deleted_at IS NULL")
 public class ReturnItem extends AuditableEntity {
   @Column(name="return_id",     nullable=false) @JdbcTypeCode(SqlTypes.UUID) private UUID returnId;
   @Column(name="order_item_id", nullable=false) @JdbcTypeCode(SqlTypes.UUID) private UUID orderItemId;
