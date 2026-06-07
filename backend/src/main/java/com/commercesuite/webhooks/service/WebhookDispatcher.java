@@ -22,6 +22,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,6 +58,11 @@ public class WebhookDispatcher {
 
     @Value("${webhooks.dispatcher.batch-size:25}") private int batchSize;
     @Value("${webhooks.dispatcher.enabled:true}")  private boolean enabled;
+    /** Per-endpoint in-flight cap — bounds noisy-neighbour blast radius (H-1). */
+    @Value("${webhooks.dispatcher.per-endpoint-concurrency:4}")
+    private int perEndpointConcurrency;
+
+    private final ConcurrentHashMap<UUID, Semaphore> endpointGates = new ConcurrentHashMap<>();
 
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5)).build();
@@ -72,13 +79,20 @@ public class WebhookDispatcher {
                 List.of(WebhookDeliveryStatus.QUEUED, WebhookDeliveryStatus.FAILED),
                 Instant.now(clock),
                 PageRequest.of(0, batchSize));
-        for (WebhookDelivery d : due) safeDeliver(d.getId());
+        for (WebhookDelivery d : due) safeDeliver(d);
         return due.size();
     }
 
-    private void safeDeliver(UUID id) {
-        try { deliverOne(id); }
-        catch (Exception ex) { log.warn("[webhooks] deliver failed id={} : {}", id, ex.toString()); }
+    private void safeDeliver(WebhookDelivery d) {
+        Semaphore gate = endpointGates.computeIfAbsent(
+                d.getEndpointId(), k -> new Semaphore(perEndpointConcurrency, true));
+        // Non-blocking partition: if this endpoint is saturated, leave the
+        // row QUEUED — next tick will retry. Prevents one slow endpoint from
+        // starving the whole dispatcher pool.
+        if (!gate.tryAcquire()) return;
+        try { deliverOne(d.getId()); }
+        catch (Exception ex) { log.warn("[webhooks] deliver failed id={} : {}", d.getId(), ex.toString()); }
+        finally { gate.release(); }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
