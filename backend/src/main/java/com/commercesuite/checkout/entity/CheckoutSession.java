@@ -1,7 +1,6 @@
 package com.commercesuite.checkout.entity;
 
 import com.commercesuite.common.entity.AuditableEntity;
-import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -10,7 +9,6 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
-import org.hibernate.annotations.Type;
 import org.hibernate.type.SqlTypes;
 
 @Entity
