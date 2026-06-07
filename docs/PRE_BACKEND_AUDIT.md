@@ -231,3 +231,4 @@ Recommended unblock sequence before Phase 1 kickoff:
 5. Publish OpenAPI artifact (MC-01) and split V001 migrations (M-01).
 
 Once the above are closed, re-run this audit; remaining MEDIUM/LOW items can be tracked inside their respective phases.
+> **Update (June 7, 2026):** Blockers B-01..B-04 and all HIGH-risk contradictions resolved via FROZEN specs (MONEY_SPEC.md, ORDER_FSM.md, PAYMENT_IDEMPOTENCY.md, RESERVATION_FSM.md). See PRE_BACKEND_AUDIT_DELTA.md and PRE_BACKEND_AUDIT_FINAL.md. **Current verdict: SAFE TO START BACKEND.**
