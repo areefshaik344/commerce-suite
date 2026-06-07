@@ -104,3 +104,9 @@ Every public-schema table requires explicit `GRANT` to `authenticated` and `serv
 | Docs              | `docs/VENDOR_MODULE.md`.                                                                                |
 
 Out of Phase 2 scope (still pending): file storage for documents, penny-drop bank verification, public storefront read API, vendor payouts.
+
+## Phase 4 — Inventory (complete)
+- Items, Movements, Reservations (FSM), Adjustments, Snapshots, LowStockRules.
+- Oversell-safe via advisory lock + PESSIMISTIC_WRITE.
+- Reservation sweeper (Spring `@Scheduled`).
+- Migration: `V008__inventory_module.sql`. See `docs/INVENTORY_MODULE.md`.
