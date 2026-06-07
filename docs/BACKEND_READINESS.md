@@ -1,3 +1,5 @@
+## Phase 3 — Catalog (complete)
+Categories, Brands, Products (FSM), Variants (paise), Media metadata, dynamic Attributes, Moderation, Reviews. Migration `V007`. Specification-based search. Public catalog endpoints permitted in `SecurityConfig`. See `docs/CATALOG_MODULE.md`.
 # Backend Readiness Report
 
 **Date:** June 7, 2026
