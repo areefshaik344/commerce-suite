@@ -14,6 +14,8 @@ import type {
   AppliedCoupon,
   CheckoutSession,
   CouponDto,
+  PaymentSelection,
+  PaymentMethodId,
   PricingBreakdown,
   VendorPricingBreakdown,
 } from "@/types/checkout";
@@ -77,6 +79,9 @@ export interface BackendCouponValidationResult {
 /* ------------------------------ mappers ------------------------------ */
 
 export function pricingFromBackend(p: BackendPricingBreakdown): PricingBreakdown {
+  return pricingObj(p);
+}
+function pricingObj(p: BackendPricingBreakdown): PricingBreakdown {
   return {
     subtotal: paiseToRupees(p.subtotalPaise),
     discount: paiseToRupees(p.discountPaise + p.couponDiscountPaise),
@@ -89,6 +94,18 @@ export function pricingFromBackend(p: BackendPricingBreakdown): PricingBreakdown
     currency: "INR",
     computedAt: Date.now(),
   };
+}
+
+const PAYMENT_METHOD_MAP: Record<BackendPaymentMethodKind, PaymentMethodId> = {
+  CARD: "card",
+  UPI: "upi",
+  NETBANKING: "card",
+  WALLET: "wallet",
+  COD: "cod",
+  EMI: "card",
+};
+function mapPaymentMethod(m: BackendPaymentMethodKind): PaymentSelection {
+  return { methodId: PAYMENT_METHOD_MAP[m] ?? "card" };
 }
 
 export function sessionFromBackend(s: BackendCheckoutSessionDto): CheckoutSession {
