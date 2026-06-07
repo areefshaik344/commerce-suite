@@ -87,6 +87,7 @@ export function pricingFromBackend(p: BackendPricingBreakdown): PricingBreakdown
     vendorBreakdowns: [] as VendorPricingBreakdown[],
     appliedCoupons: [],
     currency: "INR",
+    computedAt: Date.now(),
   };
 }
 
@@ -105,9 +106,7 @@ export function sessionFromBackend(s: BackendCheckoutSessionDto): CheckoutSessio
     step,
     addressId: s.addressId,
     shippingByVendor: {}, // backend stores one method globally — UI will fan-out
-    payment: s.paymentMethod
-      ? { method: s.paymentMethod.toLowerCase() as never, label: s.paymentMethod }
-      : null,
+    payment: s.paymentMethod ? mapPaymentMethod(s.paymentMethod) : null,
     reservation: null, // reservations are server-owned and implicit on /start
     appliedCoupons: s.couponCode
       ? [{
