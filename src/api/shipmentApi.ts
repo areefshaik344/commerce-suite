@@ -7,8 +7,11 @@ import { mockOrderRecords } from "@/mocks/mockOrderRecords";
 import { httpClient, USE_REAL_API } from "./httpClient";
 import {
   shipmentFromBackend, toBackendShipmentStatus, orderFromBackend, isUuid,
+  shipmentFromStorefront,
   type BackendShipmentDto, type BackendOrderDto,
+  type StorefrontShipmentSummaryDto,
 } from "./orderAdapter";
+import { orderManagementApi } from "./orderManagementApi";
 
 let DATA: OrderRecord[] = mockOrderRecords;
 export function __bindShipmentDataset(d: OrderRecord[]) { DATA = d; }
@@ -18,8 +21,14 @@ const seq = (p: string) => `${p}-${Date.now().toString(36)}-${Math.floor(Math.ra
 export const shipmentApi = {
   async getById(shipmentId: string): Promise<ApiResponse<Shipment>> {
     if (USE_REAL_API && isUuid(shipmentId)) {
-      const res = await httpClient.get<BackendShipmentDto>(`/shipments/${shipmentId}`);
-      return mockSuccess(shipmentFromBackend(res.data));
+      // Storefront enriched read-model (carrier, tracking, events, ETA).
+      try {
+        const res = await httpClient.get<StorefrontShipmentSummaryDto>(`/storefront/shipments/${shipmentId}`);
+        return mockSuccess(shipmentFromStorefront(res.data, ""));
+      } catch {
+        const res = await httpClient.get<BackendShipmentDto>(`/shipments/${shipmentId}`);
+        return mockSuccess(shipmentFromBackend(res.data));
+      }
     }
     await simulateDelay(150);
     for (const o of DATA) {
@@ -39,9 +48,9 @@ export const shipmentApi = {
         `/shipments/${input.shipmentId}/status`,
         { status: toBackendShipmentStatus(input.status), note: input.note ?? null },
       );
-      const orderRes = await httpClient.get<BackendOrderDto>(`/orders/${input.orderId}`);
+      const refreshed = await orderManagementApi.getById(input.orderId);
       return mockSuccess({
-        order: orderFromBackend(orderRes.data),
+        order: refreshed.data,
         shipment: shipmentFromBackend(res.data),
       });
     }
