@@ -8,6 +8,11 @@ import { toShipmentTimelineEvent } from "@/types/shipping";
 import type { OrderRecord, Shipment } from "@/types/order";
 import { shipmentApi, __bindShipmentDataset } from "./shipmentApi";
 import { mockOrderRecords } from "@/mocks/mockOrderRecords";
+import { httpClient, USE_REAL_API } from "./httpClient";
+import {
+  shipmentFromBackend, isUuid,
+  type BackendShipmentDto, type BackendTrackingEventDto,
+} from "./orderAdapter";
 
 let ORDERS: OrderRecord[] = mockOrderRecords;
 __bindShipmentDataset(ORDERS);
@@ -65,6 +70,28 @@ export const shippingApi = {
   },
 
   async getShipmentDetail(shipmentId: string): Promise<ApiResponse<ShipmentDetail>> {
+    if (USE_REAL_API && isUuid(shipmentId)) {
+      const [s, ev] = await Promise.all([
+        httpClient.get<BackendShipmentDto>(`/shipments/${shipmentId}`),
+        httpClient.get<BackendTrackingEventDto[]>(`/shipments/${shipmentId}/tracking-events`),
+      ]);
+      const shipment = shipmentFromBackend(s.data);
+      const events: TrackingEvent[] = ev.data.map(e => ({
+        id: e.id, shipmentId: e.shipmentId, legId: null,
+        type: "DEPARTED_HUB", status: shipment.status as unknown as FulfillmentStatus,
+        location: e.location ?? undefined, note: e.description ?? undefined, at: e.occurredAt,
+      }));
+      return mockSuccess({
+        shipment, packages: [], legs: [], events,
+        estimate: shipment.estimatedDeliveryAt ? {
+          shipmentId: shipment.id,
+          earliestAt: shipment.estimatedDeliveryAt,
+          latestAt: shipment.estimatedDeliveryAt,
+          confidence: 0.75, generatedAt: shipment.createdAt, source: "rule",
+        } : null,
+        labels: [], tasks: [],
+      });
+    }
     await simulateDelay(180);
     const found = findShipment(shipmentId);
     if (!found) throw new ApiError("Shipment not found", 404, "SHIPMENT_NOT_FOUND");
@@ -122,6 +149,21 @@ export const shippingApi = {
     shipmentId: string; type: TrackingEvent["type"]; status: FulfillmentStatus;
     location?: string; note?: string; actorId: string; actorRole: "vendor" | "admin";
   }): Promise<ApiResponse<{ event: TrackingEvent; shipment: Shipment }>> {
+    if (USE_REAL_API && isUuid(input.shipmentId)) {
+      const res = await httpClient.post<BackendTrackingEventDto>(
+        `/shipments/${input.shipmentId}/tracking-events`,
+        { eventType: input.type, description: input.note ?? null, location: input.location ?? null },
+      );
+      const sRes = await httpClient.get<BackendShipmentDto>(`/shipments/${input.shipmentId}`);
+      const shipment = shipmentFromBackend(sRes.data);
+      const ev: TrackingEvent = {
+        id: res.data.id, shipmentId: res.data.shipmentId, legId: null,
+        type: input.type, status: input.status,
+        location: res.data.location ?? undefined, note: res.data.description ?? undefined,
+        at: res.data.occurredAt,
+      };
+      return mockSuccess({ event: ev, shipment });
+    }
     await simulateDelay(200);
     const found = findShipment(input.shipmentId);
     if (!found) throw new ApiError("Shipment not found", 404, "SHIPMENT_NOT_FOUND");

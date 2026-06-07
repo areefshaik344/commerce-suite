@@ -4,6 +4,11 @@ import { SHIPMENT_STATUS, ORDER_STATUS } from "@/types/order";
 import { canTransitionShipment } from "@/lib/orderStatus";
 import { deriveOrderStatusFromShipments } from "@/lib/orderSelectors";
 import { mockOrderRecords } from "@/mocks/mockOrderRecords";
+import { httpClient, USE_REAL_API } from "./httpClient";
+import {
+  shipmentFromBackend, toBackendShipmentStatus, orderFromBackend, isUuid,
+  type BackendShipmentDto, type BackendOrderDto,
+} from "./orderAdapter";
 
 let DATA: OrderRecord[] = mockOrderRecords;
 export function __bindShipmentDataset(d: OrderRecord[]) { DATA = d; }
@@ -12,6 +17,10 @@ const seq = (p: string) => `${p}-${Date.now().toString(36)}-${Math.floor(Math.ra
 
 export const shipmentApi = {
   async getById(shipmentId: string): Promise<ApiResponse<Shipment>> {
+    if (USE_REAL_API && isUuid(shipmentId)) {
+      const res = await httpClient.get<BackendShipmentDto>(`/shipments/${shipmentId}`);
+      return mockSuccess(shipmentFromBackend(res.data));
+    }
     await simulateDelay(150);
     for (const o of DATA) {
       const s = o.shipments.find(x => x.id === shipmentId);
@@ -25,6 +34,17 @@ export const shipmentApi = {
     location?: string; note?: string; trackingNumber?: string; carrier?: string;
     actorId: string; actorRole: "vendor" | "admin";
   }): Promise<ApiResponse<{ order: OrderRecord; shipment: Shipment }>> {
+    if (USE_REAL_API && isUuid(input.shipmentId) && isUuid(input.orderId)) {
+      const res = await httpClient.post<BackendShipmentDto>(
+        `/shipments/${input.shipmentId}/status`,
+        { status: toBackendShipmentStatus(input.status), note: input.note ?? null },
+      );
+      const orderRes = await httpClient.get<BackendOrderDto>(`/orders/${input.orderId}`);
+      return mockSuccess({
+        order: orderFromBackend(orderRes.data),
+        shipment: shipmentFromBackend(res.data),
+      });
+    }
     await simulateDelay(300);
     const order = DATA.find(o => o.id === input.orderId);
     if (!order) throw new ApiError("Order not found", 404, "ORDER_NOT_FOUND");
