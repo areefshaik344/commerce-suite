@@ -45,11 +45,22 @@ public class AnalyticsEvent {
     @Column(name = "occurred_at", nullable = false) private Instant occurredAt;
     @Column(name = "ingested_at", nullable = false, updatable = false) private Instant ingestedAt;
 
-    @PrePersist void prePersist() {
+    /**
+     * Populates server-side defaults (id, timestamps, JSON columns).
+     * Invoked automatically by JPA via {@link PrePersist}, and exposed
+     * publicly so unit tests can build fully-initialized instances
+     * without going through the EntityManager.
+     */
+    @PrePersist
+    public void initializeDefaults() {
         if (id == null) id = UUID.randomUUID();
         if (ingestedAt == null) ingestedAt = Instant.now();
         if (occurredAt == null) occurredAt = ingestedAt;
         if (dimensions == null) dimensions = "{}";
         if (payload == null) payload = "{}";
     }
+
+    /** @deprecated retained for backwards compatibility; use {@link #initializeDefaults()}. */
+    @Deprecated
+    public void prePersist() { initializeDefaults(); }
 }
