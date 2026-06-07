@@ -19,7 +19,7 @@ import axios, {
   InternalAxiosRequestConfig,
 } from "axios";
 import { tokenStorage } from "@/lib/tokenStorage";
-import { getOrCreateRequestId } from "@/lib/requestId";
+import { newRequestId } from "@/lib/requestId";
 import { ApiError, type ApiResponse } from "./apiClient";
 
 /** Backend response envelope (mirrors com.commercesuite.common.api.ApiResponse). */
@@ -47,7 +47,7 @@ instance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const token = tokenStorage.getAccess();
     if (token) config.headers.set("Authorization", `Bearer ${token}`);
   }
-  config.headers.set("X-Request-Id", getOrCreateRequestId());
+  config.headers.set("X-Request-Id", newRequestId());
   if (config.headers?.["X-Skip-Auth"] !== undefined) {
     config.headers.delete("X-Skip-Auth");
   }
