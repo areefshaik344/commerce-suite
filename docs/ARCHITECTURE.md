@@ -34,6 +34,25 @@
 4. Webhook-ready event envelopes (`WebhookEventDTO`) buffered in an outbox for backend forwarding.
 5. Money is integer rupees throughout; no float arithmetic.
 6. URL-synced pagination, semantic design tokens only, dark-mode default.
+7. **Formal Finite State Machines** for Order / Shipment / Return / Payment /
+   Refund / Payout, with role-scoped transition guards (`src/lib/fsm.ts`).
+8. **Actor identity contract** (`ActorContext` in `src/types/actor.ts`):
+   every mutating call carries `{ actorId, actorRole, activeRole?, requestId,
+   idempotencyKey? }`. Backend re-derives identity from JWT; the client value
+   is advisory and used for correlation only.
+9. **Idempotency-Key + X-Request-Id** conventions (`src/lib/idempotency.ts`,
+   `src/lib/requestId.ts`) — required on payments, refunds, payouts, order
+   placement.
+10. **Vendor Payout domain** (`src/types/payout.ts`): `CommissionRule`,
+    `SettlementLedgerEntry`, `Settlement`, `Payout`, `PayoutSummary` with a
+    dedicated `payoutFsm`.
+11. **GDPR / DPDP contracts** (`src/lib/gdpr.ts`): account deletion with 30d
+    grace period + data export artifact model.
+12. **Reservation safety contract** (`src/lib/inventoryReservation.ts`):
+    compensating release on abandonment, payment failure, TTL expiry, logout.
+
+> See `docs/GAP_ANALYSIS_DELTA.md` and `docs/BACKEND_READINESS.md` for the
+> hardening pass that introduced items 7–12.
 
 ---
 
