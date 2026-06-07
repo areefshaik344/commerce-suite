@@ -191,7 +191,7 @@ public class StorefrontReadService {
                 .findFirst().orElse(variants.isEmpty() ? null : variants.get(0));
 
         List<ProductAttributeItemDto> attributes = jdbc.query(
-                "SELECT d.code, d.label, d.unit, pav.value_text, pav.value_number, pav.value_bool, pav.value_json "
+                "SELECT d.code, d.label, d.unit, pav.value_text, pav.value_number, pav.value_boolean, pav.value_enum, pav.value_multi "
                         + "  FROM product_attribute_values pav "
                         + "  JOIN product_attribute_definitions d ON d.id = pav.definition_id AND d.deleted_at IS NULL "
                         + " WHERE pav.product_id = ? AND pav.deleted_at IS NULL "
@@ -393,10 +393,11 @@ public class StorefrontReadService {
             if (num != null) value = num.toString();
         }
         if (value == null) {
-            Object b = rs.getObject("value_bool");
+            Object b = rs.getObject("value_boolean");
             if (b != null) value = b.toString();
         }
-        if (value == null) value = rs.getString("value_json");
+        if (value == null) value = rs.getString("value_enum");
+        if (value == null) value = rs.getString("value_multi");
         return new ProductAttributeItemDto(rs.getString("code"), rs.getString("label"), value, rs.getString("unit"));
     };
 
