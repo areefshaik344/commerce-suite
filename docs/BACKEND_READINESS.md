@@ -219,3 +219,28 @@ Phase 8.2 does NOT integrate real EMAIL/SMS/PUSH providers, webhooks, or analyti
 - `AnalyticsRetentionPolicy` declares retention SLAs (no purger yet).
 - Tests: `AnalyticsConsumerIT`, `AnalyticsAggregationIT`, `KpiServiceIT`, `DashboardMetricsIT`, `AnalyticsQueryIT`, `AnalyticsPeriodTest`.
 - Docs: `docs/ANALYTICS_MODULE.md`.
+
+## Phase 8.5 — Webhooks & External Integration Foundation (delivered)
+
+- Migration **V017** adds `webhook_endpoints`, `webhook_subscriptions`,
+  `webhook_secrets`, `webhook_deliveries`, `webhook_attempts`,
+  `webhook_status_history`, `external_integrations` (RLS + append-only).
+- `WebhookConsumer` subscribes to `OutboxDispatchEvent`; deliveries are
+  materialised per active subscription (`REQUIRES_NEW`, idempotent on
+  `(subscription_id, source_event_id)`).
+- `WebhookDispatcher` (scheduled) signs payloads (HMAC-SHA256 + ts +
+  nonce), POSTs, runs `WebhookStateMachine` transitions, and persists
+  per-attempt diagnostics.
+- `WebhookRetryService` provides exponential backoff with cap.
+- `WebhookSigner` + `WebhookSignatureVerifier` enforce replay
+  protection and secret rotation (active + previous window).
+- `ExternalIntegrationRegistry` exposes the `ExternalIntegrationProvider`
+  abstraction; placeholders only.
+- Admin API at `/api/v1/admin/webhooks/**`.
+- Tests: `WebhookSignatureTest`, `WebhookStateMachineTest`,
+  `WebhookRetryIT`, `WebhookSubscriptionIT`, `WebhookDeliveryIT`,
+  `ExternalIntegrationRegistryTest`.
+- Docs: `docs/WEBHOOK_MODULE.md`, `docs/PLATFORM_COMPLETION_REPORT.md`.
+
+This closes the final Phase 8 sprint and resolves the webhook gap in
+`PLATFORM_INTEGRATION_AUDIT.md`.
