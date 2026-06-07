@@ -5,6 +5,8 @@ import com.commercesuite.auth.entity.EmailVerificationToken;
 import com.commercesuite.auth.entity.PasswordResetToken;
 import com.commercesuite.auth.repository.EmailVerificationTokenRepository;
 import com.commercesuite.auth.repository.PasswordResetTokenRepository;
+import com.commercesuite.auth.event.AuthEvents;
+import com.commercesuite.common.outbox.OutboxPublisher;
 import com.commercesuite.common.api.ErrorCode;
 import com.commercesuite.common.exception.AppException;
 import com.commercesuite.rbac.entity.AppRole;
@@ -49,6 +51,7 @@ public class AuthService {
     private final EmailVerificationTokenRepository evtRepo;
     private final PasswordResetTokenRepository prtRepo;
     private final Clock clock;
+    private final OutboxPublisher outbox;
 
     @Transactional
     public AuthResult signup(SignupRequest req, String userAgent, String ip) {
@@ -78,6 +81,8 @@ public class AuthService {
 
         String verifyToken = issueEmailVerificationToken(u.getId());
         log.info("[signup] user={} role={} verifyTokenIssued", u.getId(), role);
+        outbox.publish(AuthEvents.AGGREGATE, u.getId().toString(), AuthEvents.USER_REGISTERED,
+                new AuthEvents.UserRegisteredPayload(u.getId(), u.getEmail(), role.name(), Instant.now(clock)));
         return issueTokens(u, userAgent, ip, verifyToken);
     }
 
@@ -95,6 +100,8 @@ public class AuthService {
         u.setFailedLoginCount(0);
         u.setLockedUntil(null);
         u.setLastLoginAt(Instant.now(clock));
+        outbox.publish(AuthEvents.AGGREGATE, u.getId().toString(), AuthEvents.USER_LOGGED_IN,
+                new AuthEvents.UserLoggedInPayload(u.getId(), ip, userAgent, Instant.now(clock)));
         return issueTokens(u, userAgent, ip, null);
     }
 
@@ -107,8 +114,18 @@ public class AuthService {
         return buildTokenResponse(u, rotated.rawToken());
     }
 
-    @Transactional public void logout(String rawRefresh) { refreshService.revoke(rawRefresh); }
-    @Transactional public int  logoutAll(UUID userId)     { return refreshService.revokeAllForUser(userId); }
+    @Transactional public void logout(String rawRefresh) {
+        var maybe = refreshService.revoke(rawRefresh);
+        maybe.ifPresent(uid -> outbox.publish(AuthEvents.AGGREGATE, uid.toString(),
+                AuthEvents.USER_LOGGED_OUT,
+                new AuthEvents.UserLoggedOutPayload(uid, false, Instant.now(clock))));
+    }
+    @Transactional public int  logoutAll(UUID userId)     {
+        int n = refreshService.revokeAllForUser(userId);
+        outbox.publish(AuthEvents.AGGREGATE, userId.toString(), AuthEvents.USER_LOGGED_OUT,
+                new AuthEvents.UserLoggedOutPayload(userId, true, Instant.now(clock)));
+        return n;
+    }
 
     @Transactional
     public void verifyEmail(String rawToken) {
@@ -123,6 +140,8 @@ public class AuthService {
         if (u.getAccountStatus() == AccountStatus.PENDING_VERIFICATION)
             u.setAccountStatus(AccountStatus.ACTIVE);
         t.setConsumedAt(now);
+        outbox.publish(AuthEvents.AGGREGATE, u.getId().toString(), AuthEvents.EMAIL_VERIFIED,
+                new AuthEvents.EmailVerifiedPayload(u.getId(), now));
     }
 
     public String issueEmailVerificationToken(UUID userId) {
@@ -143,6 +162,9 @@ public class AuthService {
                     .createdAt(Instant.now(clock))
                     .expiresAt(Instant.now(clock).plus(RESET_TOKEN_MINUTES, ChronoUnit.MINUTES)).build());
             log.info("[forgot-password] user={} resetTokenIssued", u.getId());
+            outbox.publish(AuthEvents.AGGREGATE, u.getId().toString(),
+                    AuthEvents.PASSWORD_RESET_REQUESTED,
+                    new AuthEvents.PasswordResetRequestedPayload(u.getId(), Instant.now(clock)));
         });
     }
 
@@ -159,6 +181,9 @@ public class AuthService {
         u.setPasswordHash(encoder.encode(newPassword));
         t.setConsumedAt(now);
         refreshService.revokeAllForUser(u.getId());
+        outbox.publish(AuthEvents.AGGREGATE, u.getId().toString(),
+                AuthEvents.PASSWORD_RESET_COMPLETED,
+                new AuthEvents.PasswordResetCompletedPayload(u.getId(), now));
     }
 
     @Transactional
@@ -171,6 +196,8 @@ public class AuthService {
             throw AppException.badRequest(ErrorCode.WEAK_PASSWORD, "New password must differ from current");
         u.setPasswordHash(encoder.encode(req.newPassword()));
         refreshService.revokeAllForUser(userId);
+        outbox.publish(AuthEvents.AGGREGATE, userId.toString(), AuthEvents.PASSWORD_CHANGED,
+                new AuthEvents.PasswordChangedPayload(userId, Instant.now(clock)));
     }
 
     public record AuthResult(TokenResponse tokens, UUID userId, String emailVerificationToken) {}
