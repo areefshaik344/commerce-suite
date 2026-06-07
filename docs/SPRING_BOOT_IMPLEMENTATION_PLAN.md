@@ -1,3 +1,11 @@
+## Phase 3 — Catalog (delivered)
+- Migration: `V007__catalog_module.sql`
+- Package: `com.commercesuite.catalog.{entity,repository,service,dto,controller,event}`
+- FSM: `ProductStateMachine` + `ProductStatus` enum
+- Ownership: `ProductOwnershipGuard` (vendor-by-userId or admin bypass via `MODERATE_PRODUCTS`)
+- Search: `ProductSpecifications` (keyword/category/brand/vendor/status). Public listing forces `status=APPROVED`.
+- Money: `ProductVariant.pricePaise` (BIGINT, no floats).
+- Tests: `ProductStateMachineTest`, `CategoryHierarchyIT`, `ProductOwnershipIT`, `ProductModerationIT`, `ProductReviewIT`, `CatalogSearchIT`.
 # Commerce Suite — Spring Boot Implementation Plan
 
 **Date:** June 7, 2026

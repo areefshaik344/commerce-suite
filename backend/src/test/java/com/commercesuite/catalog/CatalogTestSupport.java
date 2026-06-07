@@ -3,10 +3,6 @@ package com.commercesuite.catalog;
 import com.commercesuite.auth.service.AuthService;
 import com.commercesuite.catalog.dto.UpsertBrandRequest;
 import com.commercesuite.catalog.dto.UpsertCategoryRequest;
-import com.commercesuite.catalog.entity.Brand;
-import com.commercesuite.catalog.entity.Category;
-import com.commercesuite.catalog.repository.BrandRepository;
-import com.commercesuite.catalog.repository.CategoryRepository;
 import com.commercesuite.catalog.service.BrandService;
 import com.commercesuite.catalog.service.CategoryService;
 import com.commercesuite.rbac.entity.AppRole;
@@ -32,11 +28,6 @@ public final class CatalogTestSupport {
         var login = auth.login(new com.commercesuite.auth.dto.LoginRequest(customer.email(), "Str0ng!Pwd"),
                 "ua", "127.0.0.1");
         return new TestUser(customer.email(), login.tokens().accessToken(), customer.userId());
-    }
-
-    public static Category category(CategoryService svc, String name) {
-        var dto = svc.create(new UpsertCategoryRequest(null, name, null, null, null, 0, true));
-        return Category.builder().build().toBuilder().build(); // never used; tests fetch via repo
     }
 
     public static UUID newCategory(CategoryService svc, String name) {
