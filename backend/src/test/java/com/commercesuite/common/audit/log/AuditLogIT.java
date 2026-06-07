@@ -19,6 +19,7 @@ class AuditLogIT extends AbstractIT {
                 UUID.randomUUID(), AuditActorType.USER,
                 "USER", UUID.randomUUID().toString(),
                 AuditAction.USER_LOGGED_IN, AuditSeverity.INFO,
+                AuditCategory.AUTH,
                 Map.of("ip", "127.0.0.1"), "req-1", "corr-1",
                 "127.0.0.1", "JUnit"));
         assertThat(saved.getId()).isNotNull();

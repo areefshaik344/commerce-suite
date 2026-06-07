@@ -193,3 +193,15 @@ Tests: `NotificationStateMachineTest`, `TemplateRenderingTest`, `NotificationInb
 Docs: `docs/NOTIFICATION_MODULE.md`.
 
 Phase 8.2 does NOT integrate real EMAIL/SMS/PUSH providers, webhooks, or analytics — those land in Sprints 8.4/8.5.
+
+## Phase 8.3 — Audit Expansion (delivered)
+
+- V015 migration: adds `audit_category` enum, `HIGH` severity, +3 tables (`audit_event_mappings`, `audit_retention_policies`, `audit_export_requests`); seeded with 32 event mappings + 11 retention policies.
+- Registry-driven `AuditConsumer` replaces the hardcoded `AuditPublisher`.
+- `AuditSearchService` (criteria-based JPA `Specification`).
+- `AuditExportService` (PENDING request + outbox `audit.export_requested`).
+- `AuditRetentionPolicyService` (per-category days; no purger yet).
+- `AuditCoverageValidator` boots-up check + outbox `audit.coverage_warning`.
+- Admin REST: `GET/POST /api/v1/admin/audit*` under `hasRole('ADMIN')`.
+- Tests: AuditConsumerIT, AuditSearchIT, AuditRegistryTest, AuditCoverageValidatorTest, AuditExportIT.
+- Audit remains append-only (REVOKE UPDATE/DELETE from authenticated).

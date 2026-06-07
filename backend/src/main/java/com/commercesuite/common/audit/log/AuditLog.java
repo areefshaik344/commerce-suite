@@ -28,6 +28,10 @@ public class AuditLog {
     @Column(nullable = false, columnDefinition = "audit_severity")
     private AuditSeverity severity;
 
+    @Enumerated(EnumType.STRING) @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(nullable = false, columnDefinition = "audit_category")
+    private AuditCategory category;
+
     @Column(nullable = false, columnDefinition = "jsonb")
     @JdbcTypeCode(SqlTypes.JSON) private String metadata;
 
@@ -42,6 +46,7 @@ public class AuditLog {
         if (id == null) id = UUID.randomUUID();
         if (createdAt == null) createdAt = Instant.now();
         if (severity == null) severity = AuditSeverity.INFO;
+        if (category == null) category = AuditCategory.SYSTEM;
         if (metadata == null) metadata = "{}";
     }
 }
