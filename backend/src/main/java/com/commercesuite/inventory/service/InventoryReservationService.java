@@ -252,6 +252,43 @@ public class InventoryReservationService {
                 r.getQty(), reason, now));
     }
 
+    /**
+     * System-driven commit (RESERVATION_FSM.md: RESERVED → COMMITTED).
+     * Invoked by OrderCreationService when an order is placed. Bypasses
+     * vendor ownership because the customer (not the vendor) initiated
+     * the original reservation via Checkout.
+     */
+    @Transactional
+    public void commitBySystem(UUID reservationId) {
+        InventoryReservation r = reservationRepo.findById(reservationId).orElse(null);
+        if (r == null) return;
+        if (r.getStatus() != ReservationStatus.RESERVED) return;
+
+        allocator.acquireVariantLock(r.getVariantId());
+        Instant now = Instant.now(clock);
+        if (r.getExpiresAt().isBefore(now))
+            throw AppException.conflict(ErrorCode.CONFLICT, "Reservation expired");
+
+        InventoryItem item = itemRepo.findForUpdateByVariantId(r.getVariantId()).orElseThrow();
+        int beforeRes = item.getReservedQty();
+        int beforeOnHand = item.getOnHandQty();
+        item.setReservedQty(beforeRes - r.getQty());
+        item.setOnHandQty(beforeOnHand - r.getQty());
+
+        fsm.transition(r, ReservationStatus.COMMITTED, null, "system:order-commit");
+        r.setReleasedAt(now);
+        r.setReleaseReason(ReservationReleaseReason.COMMITTED);
+
+        movements.record(r.getVariantId(), r.getVendorId(), InventoryMovementType.SALE,
+                -r.getQty(), beforeOnHand, item.getOnHandQty(),
+                r.getId(), "RESERVATION", r.getId(),
+                "commit-by-system", null);
+
+        events.publishEvent(new InventoryCommittedEvent(r.getId(), r.getVariantId(), r.getVendorId(),
+                r.getQty(), now));
+        lowStockService.checkAndEmit(item);
+    }
+
     @Transactional(readOnly = true)
     public ReservationDto get(UUID reservationId, ActorContext actor) {
         return ReservationDto.from(loadOwned(reservationId, actor));
