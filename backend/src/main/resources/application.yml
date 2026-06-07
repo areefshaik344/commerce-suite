@@ -61,3 +61,6 @@ logging:
     root: INFO
     com.commercesuite: DEBUG
     org.springframework.security: INFO
+
+  returns:
+    window-days: ${APP_RETURNS_WINDOW_DAYS:7}

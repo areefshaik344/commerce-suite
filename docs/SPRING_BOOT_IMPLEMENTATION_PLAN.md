@@ -667,3 +667,10 @@ Implemented `com.commercesuite.inventory.*` with entities, repositories, service
 
 ## Phase 5 — Cart + Checkout Foundation ✅
 Implemented `com.commercesuite.cart.*`, `com.commercesuite.coupon.*`, and `com.commercesuite.checkout.*`. Entities (Cart, CartItem, SavedForLaterItem, Coupon, CouponUsage, CheckoutSession, CheckoutReservationLink), repositories, DTOs, events, services (`CartService`, `CartValidationService`, `CouponService`, `PricingEngine`, `CheckoutService`, `CheckoutReservationService`, `CheckoutStateMachine`, `CheckoutSweeperService`), controllers (`CartController`, `CouponController`, `CheckoutController`), Flyway `V009`, and tests (`CheckoutStateMachineTest`, `PricingEngineTest`, `CheckoutIT`). Reservation integration extends `InventoryReservationService` additively without redesigning Phase 4. Fully compliant with `MONEY_SPEC.md`, `RESERVATION_FSM.md`, and `PAYMENT_IDEMPOTENCY.md`.
+
+## Phase 6 — Delivered
+- Packages: `orders`, `shipping`, `returns`, `refunds`.
+- 13 entities, 11 repositories, 5 state machines, 8 services, 6 controllers.
+- 4 event groups (`OrderEvents`, `ShippingEvents`, `ReturnEvents`, `RefundEvents`).
+- Minimal Phase-4 extension: added `InventoryReservationService.commitBySystem` to satisfy `RESERVED → COMMITTED` for order creation.
+- Permissions reused (`PLACE_ORDER`, `MANAGE_VENDOR_ORDERS`, `MANAGE_VENDOR_RETURNS`, `MANAGE_PAYOUTS`).
