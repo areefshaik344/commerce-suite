@@ -807,3 +807,15 @@ V016 migration + 5 tables + 27-metric KPI catalog. AnalyticsConsumer
 AnalyticsQueryService, AdminAnalyticsController, VendorAnalyticsController.
 3 outbox events, AnalyticsRetentionPolicy, 6 test classes,
 ANALYTICS_MODULE.md. Analytics is fully isolated from transactional flows.
+
+## Phase 8.5 — Webhooks & External Integration Foundation (delivered)
+
+- Migration V017 (`webhook_module.sql`).
+- New package `com.commercesuite.webhooks.{domain,repository,service,
+  consumer,controller,integration,event}`.
+- `WebhookConsumer` integrates with the durable outbox from Phase 8.1.
+- `WebhookDispatcher` scheduled at `webhooks.dispatcher.delay-ms`
+  (default 2000ms), batch size `webhooks.dispatcher.batch-size`
+  (default 25); retry tuned via `webhooks.retry.*` properties.
+- All Phase 8 sprints (8.1–8.5) are now complete; see
+  `docs/PLATFORM_COMPLETION_REPORT.md`.
