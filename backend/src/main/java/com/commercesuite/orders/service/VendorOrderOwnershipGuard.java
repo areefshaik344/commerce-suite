@@ -15,7 +15,7 @@ public class VendorOrderOwnershipGuard {
 
   public void requireVendorOrAdmin(VendorOrder vo, ActorContext actor) {
     if (actor.hasRole(AppRole.ADMIN.name()) || actor.hasRole(AppRole.SUPER_ADMIN.name())) return;
-    Vendor v = vendorRepo.findByOwnerUserId(actor.userId())
+    Vendor v = vendorRepo.findByUserId(actor.userId())
         .orElseThrow(() -> AppException.forbidden("Not a vendor"));
     if (!v.getId().equals(vo.getVendorId()))
       throw AppException.forbidden("Not your vendor order");
