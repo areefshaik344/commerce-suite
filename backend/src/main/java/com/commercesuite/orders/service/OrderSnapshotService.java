@@ -31,7 +31,7 @@ public class OrderSnapshotService {
         ProductVariant v = variantRepo.findById(variantId).orElseThrow(() -> AppException.notFound("Variant"));
         return "{\"productId\":\"" + p.getId() + "\"," +
                "\"variantId\":\"" + v.getId() + "\"," +
-               "\"name\":" + json(p.getName()) + "," +
+               "\"name\":" + json(p.getTitle()) + "," +
                "\"sku\":" + json(v.getSku()) + "}";
     }
 
