@@ -661,3 +661,6 @@ The original Phase 1 deliverables are extended (no new business features) with t
 4. **Secrets** — `JWT_SECRET` is mandatory at startup; no default. The same rule applies to every later secret (payment, webhook signing, S3 keys).
 5. **Soft delete strategy** — for any entity holding user data, declare `@SQLDelete` + `@SQLRestriction("deleted_at IS NULL")`. Hard deletes are reserved for purge jobs and require an explicit native query.
 6. **Test baseline** — every controller phase MUST ship at minimum: one happy-path controller IT, one security/RBAC IT, and one negative-path validation IT, all running on Testcontainers Postgres.
+
+## Phase 4 — Inventory ✅
+Implemented `com.commercesuite.inventory.*` with entities, repositories, services (`InventoryService`, `InventoryReservationService`, `InventoryAdjustmentService`, `InventorySnapshotService`, `InventoryLowStockService`, `InventoryStateMachine`, `InventoryAllocator`, `InventoryOwnershipGuard`), controllers (`InventoryController`, `AdminInventoryController`), events, `InventoryReservationSweeper`, Flyway `V008`, and Testcontainers ITs. Aligns with `RESERVATION_FSM.md`.
