@@ -62,6 +62,8 @@ public class SecurityConfig {
                         "/actuator/info", "/actuator/prometheus",
                         "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/catalog/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/storefront/orders/**").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/v1/storefront/shipments/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/v1/storefront/**").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(eh -> eh
