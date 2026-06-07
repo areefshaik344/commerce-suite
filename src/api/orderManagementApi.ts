@@ -23,7 +23,11 @@ import type { OrderDraft } from "@/types/checkout";
 import { httpClient, USE_REAL_API } from "./httpClient";
 import {
   orderFromBackend, returnFromBackend, isUuid,
+  orderFromStorefrontCard, orderFromStorefrontDetail,
   type BackendOrderDto, type BackendPageResponse, type BackendReturnRequestDto,
+  type StorefrontOrderCardDto, type StorefrontOrderDetailDto,
+  type StorefrontOrderTimelineDto, type StorefrontShipmentSummaryDto,
+  type StorefrontReturnSummaryDto, type StorefrontRefundSummaryDto,
 } from "./orderAdapter";
 
 /** Mutable backing store — replaced on every write so React state diffs cleanly. */
@@ -82,10 +86,11 @@ export const orderManagementApi = {
       try {
         const page = (params.page ?? 1) - 1;
         const size = params.pageSize ?? 10;
-        const res = await httpClient.get<BackendPageResponse<BackendOrderDto>>(
-          "/orders", { page, size },
+        // Storefront read-model: enriched cards (product title/image, counts, flags).
+        const res = await httpClient.get<BackendPageResponse<StorefrontOrderCardDto>>(
+          "/storefront/orders", { page, size },
         );
-        const items = res.data.items.map(orderFromBackend);
+        const items = res.data.items.map(orderFromStorefrontCard);
         return mockSuccess({
           items, total: res.data.total,
           page: res.data.page + 1, pageSize: res.data.size,
@@ -111,8 +116,23 @@ export const orderManagementApi = {
 
   async getById(orderId: string): Promise<ApiResponse<OrderRecord>> {
     if (USE_REAL_API && isUuid(orderId)) {
-      const res = await httpClient.get<BackendOrderDto>(`/orders/${orderId}`);
-      return mockSuccess(orderFromBackend(res.data));
+      // Fan out enriched read-model endpoints in parallel — server-side joins
+      // already eliminate the per-row N+1; we issue one round-trip per aspect.
+      const [detail, timeline, shipments, returns, refunds] = await Promise.all([
+        httpClient.get<StorefrontOrderDetailDto>(`/storefront/orders/${orderId}`),
+        httpClient.get<StorefrontOrderTimelineDto>(`/storefront/orders/${orderId}/timeline`).catch(() => null),
+        httpClient.get<StorefrontShipmentSummaryDto[]>(`/storefront/orders/${orderId}/shipments`).catch(() => null),
+        httpClient.get<StorefrontReturnSummaryDto[]>(`/storefront/orders/${orderId}/returns`).catch(() => null),
+        httpClient.get<StorefrontRefundSummaryDto[]>(`/storefront/orders/${orderId}/refunds`).catch(() => null),
+      ]);
+      return mockSuccess(orderFromStorefrontDetail(
+        detail.data,
+        detail.data.id, // customerId not exposed on DTO; storefront scope = self
+        timeline?.data ?? null,
+        shipments?.data ?? null,
+        returns?.data ?? null,
+        refunds?.data ?? null,
+      ));
     }
     await simulateDelay(200);
     const o = DATA.find(x => x.id === orderId);
@@ -136,10 +156,12 @@ export const orderManagementApi = {
     actorRole: "customer" | "vendor" | "admin";
   }): Promise<ApiResponse<{ order: OrderRecord; cancellation: CancellationRequest }>> {
     if (USE_REAL_API && isUuid(input.orderId)) {
-      const res = await httpClient.post<BackendOrderDto>(
+      await httpClient.post<BackendOrderDto>(
         `/orders/${input.orderId}/cancel`, { reason: input.reason },
       );
-      const order = orderFromBackend(res.data);
+      // Re-fetch enriched detail so the cached order has real product/vendor data.
+      const refreshed = await this.getById(input.orderId);
+      const order = refreshed.data;
       const cancellation: CancellationRequest = {
         id: `CXL-${input.orderId}`,
         orderId: input.orderId,
@@ -238,8 +260,9 @@ export const orderManagementApi = {
         pickupAddressId: input.pickupAddressId ?? null,
       });
       const orderRes = await httpClient.get<BackendOrderDto>(`/orders/${input.orderId}`);
+      const refreshed = await this.getById(input.orderId);
       return mockSuccess({
-        order: orderFromBackend(orderRes.data),
+        order: refreshed.data,
         returnRequest: returnFromBackend(res.data),
       }, "Return requested");
     }
@@ -299,8 +322,8 @@ export const orderManagementApi = {
         status === RETURN_STATUS.REJECTED  ? `/returns/${returnId}/reject` : null;
       if (!path) throw new ApiError(`Status ${status} not supported by backend`, 400, "UNSUPPORTED_STATUS");
       const res = await httpClient.post<BackendReturnRequestDto>(path, {});
-      const orderRes = await httpClient.get<BackendOrderDto>(`/orders/${res.data.orderId}`);
-      return mockSuccess(orderFromBackend(orderRes.data));
+      const refreshed = await this.getById(res.data.orderId);
+      return mockSuccess(refreshed.data);
     }
     await simulateDelay(300);
     const order = DATA.find(o => o.returns.some(r => r.id === returnId));
