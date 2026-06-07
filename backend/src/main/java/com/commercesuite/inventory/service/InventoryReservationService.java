@@ -78,10 +78,6 @@ public class InventoryReservationService {
                 .reservedAt(now).expiresAt(expires)
                 .build());
 
-        // Seed history with the initial RESERVED state.
-        fsm.transition(r, ReservationStatus.RESERVED, actor.userId(), "reserve");
-        // The transition above is a no-op (RESERVED -> RESERVED) — record the initial entry manually instead.
-
         movements.record(variantId, ov.vendorId(), InventoryMovementType.RESERVATION,
                 req.qty(), before, after, r.getId(), "RESERVATION", r.getId(),
                 "reserve", actor.userId());
