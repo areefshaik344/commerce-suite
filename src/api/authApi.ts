@@ -7,6 +7,7 @@ import { simulateDelay, ApiError, type ApiResponse } from "./apiClient";
 import { mockUsers, mockCredentials } from "@/mocks";
 import type { User } from "@/data/mock-users";
 import { signMockToken, decodeToken, isExpired, TOKEN_TTL } from "@/lib/tokenStorage";
+import { httpClient, USE_REAL_API } from "./httpClient";
 
 function ok<T>(data: T, message = "OK"): ApiResponse<T> {
   return { data, status: 200, message };
