@@ -20,6 +20,11 @@ import { buildOrderFromDraft } from "@/lib/orderFactory";
 import { deriveOrderStatusFromShipments, getActiveItemQuantity } from "@/lib/orderSelectors";
 import { canTransitionShipment } from "@/lib/orderStatus";
 import type { OrderDraft } from "@/types/checkout";
+import { httpClient, USE_REAL_API } from "./httpClient";
+import {
+  orderFromBackend, returnFromBackend, isUuid,
+  type BackendOrderDto, type BackendPageResponse, type BackendReturnRequestDto,
+} from "./orderAdapter";
 
 /** Mutable backing store — replaced on every write so React state diffs cleanly. */
 let DATA: OrderRecord[] = [...mockOrderRecords];
@@ -73,6 +78,23 @@ export interface ListOrdersParams extends OrderListFilters {
 export const orderManagementApi = {
   /** Customer/vendor/admin scoped list — caller must pass appropriate filters. */
   async list(params: ListOrdersParams = {}): Promise<ApiResponse<OrderListResult>> {
+    if (USE_REAL_API) {
+      try {
+        const page = (params.page ?? 1) - 1;
+        const size = params.pageSize ?? 10;
+        const res = await httpClient.get<BackendPageResponse<BackendOrderDto>>(
+          "/orders", { page, size },
+        );
+        const items = res.data.items.map(orderFromBackend);
+        return mockSuccess({
+          items, total: res.data.total,
+          page: res.data.page + 1, pageSize: res.data.size,
+          totalPages: res.data.totalPages,
+        });
+      } catch (err) {
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) throw err;
+      }
+    }
     await simulateDelay(250);
     const filtered = applyFilters(DATA, params)
       .sort((a, b) => b.placedAt.localeCompare(a.placedAt));
@@ -88,6 +110,10 @@ export const orderManagementApi = {
   },
 
   async getById(orderId: string): Promise<ApiResponse<OrderRecord>> {
+    if (USE_REAL_API && isUuid(orderId)) {
+      const res = await httpClient.get<BackendOrderDto>(`/orders/${orderId}`);
+      return mockSuccess(orderFromBackend(res.data));
+    }
     await simulateDelay(200);
     const o = DATA.find(x => x.id === orderId);
     if (!o) throw new ApiError("Order not found", 404, "ORDER_NOT_FOUND");
@@ -109,6 +135,26 @@ export const orderManagementApi = {
     orderId: string; itemIds: string[]; reason: string; note?: string; actorId: string;
     actorRole: "customer" | "vendor" | "admin";
   }): Promise<ApiResponse<{ order: OrderRecord; cancellation: CancellationRequest }>> {
+    if (USE_REAL_API && isUuid(input.orderId)) {
+      const res = await httpClient.post<BackendOrderDto>(
+        `/orders/${input.orderId}/cancel`, { reason: input.reason },
+      );
+      const order = orderFromBackend(res.data);
+      const cancellation: CancellationRequest = {
+        id: `CXL-${input.orderId}`,
+        orderId: input.orderId,
+        vendorOrderId: null,
+        itemIds: input.itemIds,
+        reason: input.reason, note: input.note,
+        status: CANCELLATION_STATUS.COMPLETED,
+        refundAmount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        resolvedAt: new Date().toISOString(),
+        requestedBy: input.actorId,
+      };
+      return mockSuccess({ order, cancellation }, "Cancellation processed");
+    }
     await simulateDelay(350);
     const order = DATA.find(o => o.id === input.orderId);
     if (!order) throw new ApiError("Order not found", 404, "ORDER_NOT_FOUND");
@@ -177,6 +223,26 @@ export const orderManagementApi = {
     orderId: string; itemIds: string[]; reason: string; note?: string;
     pickupAddressId?: string; actorId: string;
   }): Promise<ApiResponse<{ order: OrderRecord; returnRequest: ReturnRequest }>> {
+    if (USE_REAL_API && isUuid(input.orderId)) {
+      // Backend requires vendorOrderId + qty per item; the FE only knows item ids,
+      // so we resolve via the cached order detail.
+      const detail = await httpClient.get<BackendOrderDto>(`/orders/${input.orderId}`);
+      const vendorOrderId =
+        detail.data.vendorOrders.find(v => v.items.some(i => input.itemIds.includes(i.id)))?.id;
+      if (!vendorOrderId) throw new ApiError("Vendor order not found for items", 404, "VENDOR_ORDER_NOT_FOUND");
+      const items = detail.data.vendorOrders.flatMap(v => v.items)
+        .filter(i => input.itemIds.includes(i.id))
+        .map(i => ({ orderItemId: i.id, qty: i.qty }));
+      const res = await httpClient.post<BackendReturnRequestDto>("/returns", {
+        vendorOrderId, items, reason: input.reason, note: input.note ?? null,
+        pickupAddressId: input.pickupAddressId ?? null,
+      });
+      const orderRes = await httpClient.get<BackendOrderDto>(`/orders/${input.orderId}`);
+      return mockSuccess({
+        order: orderFromBackend(orderRes.data),
+        returnRequest: returnFromBackend(res.data),
+      }, "Return requested");
+    }
     await simulateDelay(400);
     const order = DATA.find(o => o.id === input.orderId);
     if (!order) throw new ApiError("Order not found", 404, "ORDER_NOT_FOUND");
@@ -226,6 +292,16 @@ export const orderManagementApi = {
   },
 
   async updateReturnStatus(returnId: string, status: ReturnRequest["status"], actorId: string, actorRole: "vendor"|"admin"): Promise<ApiResponse<OrderRecord>> {
+    if (USE_REAL_API && isUuid(returnId)) {
+      const path =
+        status === RETURN_STATUS.PICKED_UP ? `/returns/${returnId}/receive` :
+        status === RETURN_STATUS.REFUNDED  ? `/returns/${returnId}/complete` :
+        status === RETURN_STATUS.REJECTED  ? `/returns/${returnId}/reject` : null;
+      if (!path) throw new ApiError(`Status ${status} not supported by backend`, 400, "UNSUPPORTED_STATUS");
+      const res = await httpClient.post<BackendReturnRequestDto>(path, {});
+      const orderRes = await httpClient.get<BackendOrderDto>(`/orders/${res.data.orderId}`);
+      return mockSuccess(orderFromBackend(orderRes.data));
+    }
     await simulateDelay(300);
     const order = DATA.find(o => o.returns.some(r => r.id === returnId));
     if (!order) throw new ApiError("Return not found", 404, "RETURN_NOT_FOUND");
