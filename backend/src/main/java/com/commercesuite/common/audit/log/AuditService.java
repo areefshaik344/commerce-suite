@@ -1,6 +1,7 @@
 package com.commercesuite.common.audit.log;
 
 import com.commercesuite.common.audit.ActorContextHolder;
+import com.commercesuite.common.outbox.OutboxPublisher;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
@@ -18,6 +19,7 @@ public class AuditService {
     private final AuditLogRepository repo;
     private final ActorContextHolder actorHolder;
     private final ObjectMapper mapper;
+    private final OutboxPublisher outbox;
 
     @Transactional(propagation = Propagation.REQUIRED)
     public AuditLog record(AuditContext ctx) {
@@ -33,13 +35,24 @@ public class AuditService {
                 .entityId(ctx.entityId())
                 .action(ctx.action().name())
                 .severity(ctx.severity() == null ? AuditSeverity.INFO : ctx.severity())
+                .category(ctx.category() == null ? AuditCategory.SYSTEM : ctx.category())
                 .metadata(serialize(ctx.metadata()))
                 .requestId(requestId)
                 .correlationId(ctx.correlationId())
                 .ipAddress(ctx.ipAddress())
                 .userAgent(ctx.userAgent())
                 .build();
-        return repo.save(row);
+        AuditLog saved = repo.save(row);
+        // Emit a domain event via the durable outbox so downstream
+        // subscribers (SIEM, archival, etc.) can react asynchronously.
+        outbox.publish("AUDIT_LOG", saved.getId().toString(),
+                AuditEvents.RECORD_CREATED,
+                new AuditEvents.RecordCreatedPayload(
+                        saved.getId(), saved.getActorId(), saved.getEntityType(),
+                        saved.getEntityId(), saved.getAction(),
+                        saved.getCategory(), saved.getSeverity(),
+                        saved.getCreatedAt()));
+        return saved;
     }
 
     private String serialize(Map<String, Object> meta) {
