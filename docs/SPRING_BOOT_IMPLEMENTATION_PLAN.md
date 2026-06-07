@@ -798,3 +798,12 @@ Implemented `com.commercesuite.cart.*`, `com.commercesuite.coupon.*`, and `com.c
 Sprint delivered: registry-driven audit consumer, search/export/retention/coverage
 services, admin REST controller, V015 migration, 5 test classes, AUDIT_MODULE.md.
 Audit pipeline now fully decoupled from domain services via the outbox.
+
+## Phase 8.4 — Analytics Foundation ✅
+
+V016 migration + 5 tables + 27-metric KPI catalog. AnalyticsConsumer
+(REQUIRES_NEW + try/catch), AnalyticsAggregator (DAY/WEEK/MONTH/LIFETIME
+× ADMIN/VENDOR/CUSTOMER), DashboardMetricsService, KpiService,
+AnalyticsQueryService, AdminAnalyticsController, VendorAnalyticsController.
+3 outbox events, AnalyticsRetentionPolicy, 6 test classes,
+ANALYTICS_MODULE.md. Analytics is fully isolated from transactional flows.

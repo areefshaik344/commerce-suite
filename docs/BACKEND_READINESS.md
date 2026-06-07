@@ -205,3 +205,17 @@ Phase 8.2 does NOT integrate real EMAIL/SMS/PUSH providers, webhooks, or analyti
 - Admin REST: `GET/POST /api/v1/admin/audit*` under `hasRole('ADMIN')`.
 - Tests: AuditConsumerIT, AuditSearchIT, AuditRegistryTest, AuditCoverageValidatorTest, AuditExportIT.
 - Audit remains append-only (REVOKE UPDATE/DELETE from authenticated).
+
+## Phase 8.4 — Analytics & BI Foundation (delivered)
+
+- V016 migration: 4 enums (`analytics_category`, `analytics_period`, `analytics_metric_type`, `dashboard_scope`), 5 tables (`analytics_events`, `analytics_metrics`, `analytics_aggregations`, `analytics_snapshots`, `dashboard_metrics`), full GRANT + RLS + append-only enforcement, seeded with 27-metric KPI catalog.
+- `AnalyticsConsumer` subscribes to `OutboxDispatchEvent`; `AnalyticsService.record` runs in `REQUIRES_NEW` and the consumer swallows all exceptions — analytics CANNOT impact transactional flows (Orders, Payments, Inventory, Checkout).
+- `AnalyticsEventClassifier` maps 22 outbox event types to category + KPI metric codes (single source of truth).
+- `AnalyticsAggregator` rolls every classified event into DAY / WEEK / MONTH / LIFETIME buckets across ADMIN / VENDOR / CUSTOMER scopes and upserts `dashboard_metrics`.
+- `KpiService` computes deterministic, division-by-zero-safe KPIs (checkout conversion, refund rate, AOV).
+- `AnalyticsQueryService` powers time-series reads for dashboards.
+- Admin + Vendor REST controllers: `/api/v1/admin/analytics/{overview,revenue,orders,vendors}` and `/api/v1/vendor/analytics/{overview,orders,revenue}`. Ownership enforced at controller AND RLS.
+- 3 new domain events via durable outbox: `analytics.event_recorded`, `analytics.aggregation_completed`, `analytics.dashboard_updated`.
+- `AnalyticsRetentionPolicy` declares retention SLAs (no purger yet).
+- Tests: `AnalyticsConsumerIT`, `AnalyticsAggregationIT`, `KpiServiceIT`, `DashboardMetricsIT`, `AnalyticsQueryIT`, `AnalyticsPeriodTest`.
+- Docs: `docs/ANALYTICS_MODULE.md`.
