@@ -170,16 +170,16 @@ export function mapRefundStatus(s: BackendRefundStatus): RefundRecord["status"] 
 
 const EMPTY_ADDRESS: OrderShippingAddressSnapshot = {
   id: "",
-  fullName: "",
+  label: "Shipping",
+  name: "",
   phone: "",
-  pincode: "",
+  line1: "",
+  line2: "",
   city: "",
   state: "",
-  addressLine1: "",
-  addressLine2: "",
-  landmark: "",
-  type: "HOME",
+  pincode: "",
   isDefault: false,
+  type: "HOME",
   capturedAt: new Date(0).toISOString(),
 };
 
@@ -233,14 +233,16 @@ export function orderFromBackend(o: BackendOrderDto): OrderRecord {
   const vendors = o.vendorOrders.map(vendorOrderFromBackend);
   const pricing: PricingBreakdown = {
     subtotal: paiseToRupees(o.subtotalPaise),
-    productDiscount: paiseToRupees(o.discountPaise),
-    couponDiscount: paiseToRupees(o.couponDiscountPaise),
+    discount: paiseToRupees(o.discountPaise + o.couponDiscountPaise),
     shipping: paiseToRupees(o.shippingPaise),
     tax: paiseToRupees(o.taxPaise),
     platformFee: paiseToRupees(o.platformFeePaise),
     grandTotal: paiseToRupees(o.grandTotalPaise),
     currency: "INR",
-    appliedCoupon: o.couponCode ? { code: o.couponCode, discount: paiseToRupees(o.couponDiscountPaise) } as never : null,
+    appliedCoupons: o.couponCode
+      ? [{ code: o.couponCode, discount: paiseToRupees(o.couponDiscountPaise) } as never]
+      : [],
+    computedAt: Date.parse(o.placedAt) || Date.now(),
     vendorBreakdowns: vendors.map(v => ({
       vendorId: v.vendor.vendorId,
       vendorName: v.vendor.vendorName,
