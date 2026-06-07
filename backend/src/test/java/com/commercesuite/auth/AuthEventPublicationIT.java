@@ -19,8 +19,8 @@ class AuthEventPublicationIT extends AbstractIT {
     @Test
     void signup_writes_user_registered_to_outbox() {
         String email = "evt-" + System.nanoTime() + "@example.com";
-        auth.signup(new SignupRequest(email, "+919999000111",
-                        "Password123!", "Test User", AppRole.CUSTOMER),
+        auth.signup(new SignupRequest(email, "Password123!",
+                        "Test User", "+919999000111", AppRole.CUSTOMER),
                 "JUnit", "127.0.0.1");
         boolean found = outboxRepo.findAll().stream()
                 .anyMatch(e -> AuthEvents.USER_REGISTERED.equals(e.getEventType())
