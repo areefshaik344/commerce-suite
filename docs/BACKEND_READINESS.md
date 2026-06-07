@@ -110,3 +110,13 @@ Out of Phase 2 scope (still pending): file storage for documents, penny-drop ban
 - Oversell-safe via advisory lock + PESSIMISTIC_WRITE.
 - Reservation sweeper (Spring `@Scheduled`).
 - Migration: `V008__inventory_module.sql`. See `docs/INVENTORY_MODULE.md`.
+
+## Phase 5 — Cart + Checkout Foundation (complete)
+- Cart (`carts`, `cart_items`, `saved_for_later_items`) with one-active-cart-per-user partial unique index; guest-cart merge hook.
+- Coupon engine (`coupons`, `coupon_usage`) with PERCENTAGE / FIXED_AMOUNT / FREE_SHIPPING types and active-window + per-user/global usage limits.
+- `PricingEngine` — integer-paise only, BigDecimal HALF_UP for percentage/BPS, deterministic.
+- `CheckoutStateMachine` (`CREATED → ADDRESS_SELECTED → SHIPPING_SELECTED → PAYMENT_SELECTED → READY_FOR_ORDER → CONVERTED`; CANCELLED/EXPIRED terminal).
+- Inventory integration via `InventoryReservationService.reserveForCustomer(...)` + `releaseBySystem(...)`; reservations remain RESERVED until order COMMIT (RESERVATION_FSM.md).
+- `CheckoutSweeperService` (Spring `@Scheduled`) expires stale sessions and releases reservations as `ABANDONED`.
+- Idempotency on `POST /checkout/start` and `POST /checkout/cancel` via `Idempotency-Key` header (PAYMENT_IDEMPOTENCY.md key shape).
+- Migration `V009__cart_checkout_module.sql`. Docs: `docs/CART_CHECKOUT_MODULE.md`.
