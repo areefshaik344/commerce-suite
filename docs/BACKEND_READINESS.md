@@ -3,6 +3,11 @@
 **Date:** June 7, 2026
 **Scope:** Post-hardening assessment for Lovable Cloud / Supabase implementation.
 
+**Update (post B-01..B-04 resolution):** All four blockers resolved via FROZEN specs:
+`MONEY_SPEC.md`, `ORDER_FSM.md`, `PAYMENT_IDEMPOTENCY.md`, `RESERVATION_FSM.md`.
+See `PRE_BACKEND_AUDIT_DELTA.md`. **Overall readiness raised to 9.0 / 10.**
+**Verdict: SAFE TO START BACKEND.**
+
 ## Readiness Score
 
 | Dimension                  | Score (10) | Notes |
