@@ -5,6 +5,17 @@ import type { Product, Category } from "@/data/mock-products";
 import type { Review } from "@/data/mock-orders";
 import { PRODUCT_STATUS, type ProductStatus } from "@/types/catalog";
 import { assertOwnership, canEditProduct, canSubmitForReview } from "@/lib/productOwnership";
+import { httpClient, USE_REAL_API } from "./httpClient";
+import { ApiError } from "./apiClient";
+import {
+  cardToLegacyProduct,
+  detailToLegacyProduct,
+  type BackendProductCardDto,
+  type BackendProductDetailDto,
+  type BackendProductSearchResult,
+  type BackendBrandFilterDto,
+} from "./storefrontAdapter";
+import { rupeesToPaise } from "@/lib/money";
 
 /**
  * Mutable moderation/status overlay keyed by product id. The mock dataset
@@ -42,6 +53,32 @@ export interface ProductFilters {
 
 export const productApi = {
   async getProducts(filters: ProductFilters = {}): Promise<PaginatedResponse<Product>> {
+    if (USE_REAL_API && !filters.vendorId && (!filters.status || filters.status === PRODUCT_STATUS.APPROVED)) {
+      try {
+        const params: Record<string, unknown> = {
+          q: filters.search,
+          categorySlug: filters.category,
+          brandIds: Array.isArray(filters.brand) ? filters.brand : filters.brand ? [filters.brand] : undefined,
+          minPricePaise: filters.minPrice !== undefined ? rupeesToPaise(filters.minPrice) : undefined,
+          maxPricePaise: filters.maxPrice !== undefined ? rupeesToPaise(filters.maxPrice) : undefined,
+          minRating: filters.minRating,
+          page: Math.max(0, (filters.page ?? 1) - 1),
+          size: filters.pageSize ?? 12,
+          sort: filters.sortBy,
+        };
+        const res = await httpClient.get<BackendProductSearchResult>("/storefront/products", params, { skipAuth: true });
+        const p = res.data.page;
+        return {
+          data: p.content.map(cardToLegacyProduct),
+          total: p.totalElements,
+          page: p.number + 1,
+          pageSize: p.size,
+          totalPages: p.totalPages,
+        };
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err;
+      }
+    }
     await simulateDelay(200);
     let result = allProducts().filter((p) =>
       filters.status ? statusOf(p.id) === filters.status : statusOf(p.id) === PRODUCT_STATUS.APPROVED
@@ -99,6 +136,15 @@ export const productApi = {
   },
 
   async getProductBySlug(slug: string): Promise<ApiResponse<Product | null>> {
+    if (USE_REAL_API) {
+      try {
+        const res = await httpClient.get<BackendProductDetailDto>(`/storefront/products/${encodeURIComponent(slug)}`, undefined, { skipAuth: true });
+        return { data: res.data ? detailToLegacyProduct(res.data) : null, status: res.status, message: res.message };
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return mockSuccess(null);
+        if (!(err instanceof ApiError)) throw err;
+      }
+    }
     await simulateDelay(150);
     const product = allProducts().find(p => p.slug === slug) || null;
     return mockSuccess(product);
@@ -115,6 +161,15 @@ export const productApi = {
   },
 
   async getProductReviews(productId: string): Promise<ApiResponse<Review[]>> {
+    if (USE_REAL_API) {
+      try {
+        const { reviewApi } = await import("./reviewApi");
+        const res = await reviewApi.getProductReviews(productId);
+        return mockSuccess(res.data);
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err;
+      }
+    }
     await simulateDelay(200);
     return mockSuccess(mockReviews.filter(r => r.productId === productId));
   },
@@ -127,6 +182,17 @@ export const productApi = {
   },
 
   async getRelatedProducts(productId: string, limit = 4): Promise<ApiResponse<Product[]>> {
+    if (USE_REAL_API) {
+      try {
+        // Storefront PDP includes relatedProducts — fetch the detail via id-lookup workaround:
+        // we don't know the slug here, so fall back to a category search using the product detail.
+        // The PDP page already gets related products inline; this helper is a secondary path.
+        const detail = await httpClient.get<BackendProductDetailDto>(`/storefront/products/${productId}`, undefined, { skipAuth: true });
+        return mockSuccess(detail.data.relatedProducts.slice(0, limit).map(cardToLegacyProduct));
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err;
+      }
+    }
     await simulateDelay(150);
     const product = mockProducts.find(p => p.id === productId);
     if (!product) return mockSuccess([]);
@@ -135,21 +201,57 @@ export const productApi = {
   },
 
   async getFeaturedProducts(): Promise<ApiResponse<Product[]>> {
+    if (USE_REAL_API) {
+      try {
+        const res = await httpClient.get<BackendProductSearchResult>("/storefront/products", { sort: "popularity", size: 12 }, { skipAuth: true });
+        const featured = res.data.page.content.filter(p => p.featured).map(cardToLegacyProduct);
+        return mockSuccess(featured.length ? featured : res.data.page.content.map(cardToLegacyProduct));
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err;
+      }
+    }
     await simulateDelay(100);
     return mockSuccess(mockProducts.filter(p => p.featured));
   },
 
   async getTrendingProducts(): Promise<ApiResponse<Product[]>> {
+    if (USE_REAL_API) {
+      try {
+        const res = await httpClient.get<BackendProductSearchResult>("/storefront/products", { sort: "popularity", size: 12 }, { skipAuth: true });
+        return mockSuccess(res.data.page.content.map(cardToLegacyProduct));
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err;
+      }
+    }
     await simulateDelay(100);
     return mockSuccess(mockProducts.filter(p => p.trending));
   },
 
   async getDeals(): Promise<ApiResponse<Product[]>> {
+    if (USE_REAL_API) {
+      try {
+        const res = await httpClient.get<BackendProductSearchResult>("/storefront/products", { sort: "price-asc", size: 24 }, { skipAuth: true });
+        const deals = res.data.page.content
+          .map(cardToLegacyProduct)
+          .filter(p => p.discount >= 20);
+        return mockSuccess(deals);
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err;
+      }
+    }
     await simulateDelay(100);
     return mockSuccess(mockProducts.filter(p => p.discount >= 20));
   },
 
   async searchSuggestions(query: string): Promise<ApiResponse<string[]>> {
+    if (USE_REAL_API) {
+      try {
+        const res = await httpClient.get<string[]>("/storefront/suggest", { q: query, limit: 8 }, { skipAuth: true });
+        return mockSuccess(res.data ?? []);
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err;
+      }
+    }
     await simulateDelay(100);
     if (query.length < 2) return mockSuccess([]);
     const q = query.toLowerCase();
@@ -161,6 +263,14 @@ export const productApi = {
   },
 
   async getBrands(): Promise<ApiResponse<string[]>> {
+    if (USE_REAL_API) {
+      try {
+        const res = await httpClient.get<BackendBrandFilterDto[]>("/storefront/brands", undefined, { skipAuth: true });
+        return mockSuccess(res.data.map(b => b.name));
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err;
+      }
+    }
     return mockSuccess([...new Set(mockProducts.map(p => p.brand))]);
   },
 
