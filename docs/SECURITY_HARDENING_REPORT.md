@@ -71,3 +71,18 @@ _None at the application layer._ Deployment-layer blockers tracked in `PRODUCTIO
 4. Sprint D: Mediums.
 
 After Sprints A–C the platform reaches the **READY FOR PRODUCTION** security bar.
+---
+
+## Addendum — Phase 9.5 closures
+
+| Finding | Status | Implementation |
+|---------|--------|----------------|
+| S-H1 rate limiting       | Closed | `RateLimitFilter` + `RateLimitService` (token bucket). Redis backend is a swap-in. |
+| S-H2 account lockout     | Closed (foundation) | `auth_lockouts` table (V018). Tracker hook to be invoked from auth service. |
+| S-H3 security headers    | Closed | `SecurityHeadersFilter` (CSP, HSTS, XFO, COOP, CORP, Permissions-Policy). |
+| S-H4 HIBP                | Open (toggle) | Enable via Lovable Cloud auth settings; no code required. |
+| S-H5 MFA for admins      | Closed | TOTP + recovery codes. `MfaEnforcement` declares mandatory roles. |
+| S-H6 webhook SSRF        | Mitigated | Webhook URLs validated at registration; runtime block-list TBD. |
+| S-H7 dependency scanning | Closed | `.github/workflows/ci.yml` runs OWASP dep-check + Trivy. |
+
+Residual MEDIUM items remain tracked in `PRODUCTION_READINESS_REPORT.md`.

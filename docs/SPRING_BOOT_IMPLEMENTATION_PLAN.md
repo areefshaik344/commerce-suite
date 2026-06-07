@@ -819,3 +819,18 @@ ANALYTICS_MODULE.md. Analytics is fully isolated from transactional flows.
   (default 25); retry tuned via `webhooks.retry.*` properties.
 - All Phase 8 sprints (8.1–8.5) are now complete; see
   `docs/PLATFORM_COMPLETION_REPORT.md`.
+
+## Phase 9.5 delivered
+
+| Area                | Component                                  |
+|---------------------|--------------------------------------------|
+| Containerization    | `deployment/docker/Dockerfile` + compose   |
+| Orchestration       | `deployment/k8s/*.yaml`                    |
+| Secrets             | `common.secrets.SecretProvider` + variants |
+| Rate limiting       | `common.ratelimit.*`                       |
+| Security headers    | `security.config.SecurityHeadersFilter`    |
+| MFA                 | `mfa.*` + migration V018                   |
+| Observability       | `common.observability.BusinessMetrics`, Prometheus exporter |
+| Health              | `common.health.*` + actuator probes        |
+| DLQ replay          | `common.dlq.*`                             |
+| CI/CD               | `.github/workflows/{ci,security}.yml`      |

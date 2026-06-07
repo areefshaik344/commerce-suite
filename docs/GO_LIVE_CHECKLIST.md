@@ -89,3 +89,20 @@ _Gate review for staging → production cutover. Every item must be **Done** or 
 - [ ] Database rollback strategy (forward-only migrations confirmed)
 - [ ] Communication plan to vendors + customers
 - [ ] Go/no-go meeting signed off by: Eng Lead, SRE, Security, Finance, Product
+---
+
+## Phase 9.5 — automation status
+
+The following items are now satisfied by code in this repository and need only verification, not implementation:
+
+- Dockerfile + multi-stage build, non-root, healthcheck (`deployment/docker/Dockerfile`)
+- Kubernetes manifests, HPA, PDB, NetworkPolicy (`deployment/k8s/`)
+- Liveness + readiness probes wired (`management.endpoint.health.probes.enabled=true`)
+- Security headers middleware active (`SecurityHeadersFilter`)
+- Rate limiting on auth/admin/webhook endpoints
+- MFA TOTP + recovery codes available for ADMIN/FINANCE accounts
+- DLQ replay API (`/api/v1/admin/dlq/{channel}/replay`)
+- Prometheus exporter (`/actuator/prometheus`)
+- CI gates: unit, integration, dep-scan, container build
+
+Operators must still verify configuration values, secret sourcing, DNS, TLS, and run the staging restore drill.
