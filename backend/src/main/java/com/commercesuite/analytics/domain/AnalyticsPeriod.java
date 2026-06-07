@@ -9,7 +9,6 @@ import java.time.temporal.TemporalAdjusters;
 public enum AnalyticsPeriod {
     HOUR, DAY, WEEK, MONTH, LIFETIME;
 
-    /** Truncates the given instant to the start of its bucket. */
     public Instant bucketStart(Instant at) {
         var z = at.atZone(ZoneOffset.UTC);
         return switch (this) {
