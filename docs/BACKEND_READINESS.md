@@ -173,3 +173,23 @@ Tests: `OutboxPersistenceIT`, `OutboxDispatcherIT`, `OutboxRetryPolicyTest`, `Au
 Docs: `docs/OUTBOX_ARCHITECTURE.md`, `docs/AUDIT_FOUNDATION.md`, `docs/NOTIFICATION_FOUNDATION.md`.
 
 Phase 8.1 does NOT implement notification delivery, analytics persistence, or webhook delivery — those are sprints 8.2 / 8.4 / 8.5 per `PHASE8_IMPLEMENTATION_BLUEPRINT.md`.
+
+---
+
+## Phase 8.2 — Notification Module
+
+**Status:** delivered. Implements notification domain, templates, delivery tracking, preference-driven suppression, in-app inbox, and event-driven consumers — all on top of the Phase 8.1 durable outbox.
+
+Modules:
+- `notifications/domain` — `Notification`, `NotificationTemplate`, `NotificationDelivery`, `NotificationBatch`, `NotificationStatusHistory`, `NotificationStatus`.
+- `notifications/service` — `NotificationStateMachine`, `TemplateRenderer`, `NotificationTemplateService`, `NotificationPreferenceEvaluator`, `NotificationService`, `NotificationDeliveryService`, `NotificationInboxService`.
+- `notifications/delivery` — strategy interface + `InAppDeliveryStrategy` (real) and `Email/Sms/PushDeliveryStrategy` (stubs).
+- `notifications/consumer/NotificationConsumer` — `OutboxDispatchEvent` listener mapping 16 business event types to template codes.
+- `notifications/controller` — `NotificationController` (inbox), `NotificationTemplateController` (admin).
+- `notifications/event/NotificationEvents` — 6 events published through the outbox.
+
+Migration: `V014__notification_module.sql` (1 enum, 5 tables, indexes, grants, RLS, append-only history, 16 seed templates).
+Tests: `NotificationStateMachineTest`, `TemplateRenderingTest`, `NotificationInboxIT`, `NotificationDeliveryIT`, `NotificationPreferenceSuppressionIT`, `NotificationConsumerIT`.
+Docs: `docs/NOTIFICATION_MODULE.md`.
+
+Phase 8.2 does NOT integrate real EMAIL/SMS/PUSH providers, webhooks, or analytics — those land in Sprints 8.4/8.5.
