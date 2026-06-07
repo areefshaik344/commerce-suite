@@ -184,9 +184,25 @@ export const checkoutApi = {
   },
 
   async placeOrder(req: PlaceOrderRequest): Promise<ApiResponse<PlaceOrderResult>> {
-    // NOTE: /orders endpoint is not part of CART_CHECKOUT_MODULE (Phase 5).
-    // Until the Orders module ships its place-order API, this remains mock-only
-    // even when USE_REAL_API is true. Tracked in docs/FE_CART_CHECKOUT_INTEGRATION_REPORT.md.
+    // Phase FE-5: wire to backend POST /orders when the checkout session has a real UUID.
+    // The backend takes `{ checkoutId }` and commits reservations server-side.
+    const sessionId = (req.draft as unknown as { sessionId?: string }).sessionId
+      ?? (req as unknown as { sessionId?: string }).sessionId;
+    if (USE_REAL_API && isUuid(sessionId ?? "")) {
+      try {
+        const res = await httpClient.post<{ id: string; placedAt: string }>(
+          "/orders",
+          { checkoutId: sessionId },
+          { headers: { "Idempotency-Key": idempotencyKey("ord") } },
+        );
+        return mockSuccess(
+          { orderId: res.data.id, placedAt: res.data.placedAt ?? new Date().toISOString() },
+          "Order placed",
+        );
+      } catch (err) {
+        if (err instanceof ApiError) throw err;
+      }
+    }
     await simulateDelay(700);
     // Simulated failure ~5% to exercise failure path.
     if (Math.random() < 0.05) {
