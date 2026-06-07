@@ -60,6 +60,7 @@ public class SecurityConfig {
                         "/api/v1/auth/email/verify").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/info",
                         "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/catalog/**").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(eh -> eh
                 .authenticationEntryPoint((req, res, ex) -> write(mapper, res, HttpServletResponse.SC_UNAUTHORIZED,
