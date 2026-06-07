@@ -2,12 +2,15 @@ package com.commercesuite.auth.service;
 
 import com.commercesuite.auth.entity.RefreshToken;
 import com.commercesuite.auth.repository.RefreshTokenRepository;
+import com.commercesuite.auth.event.AuthEvents;
 import com.commercesuite.common.api.ErrorCode;
 import com.commercesuite.common.exception.AppException;
+import com.commercesuite.common.outbox.OutboxPublisher;
 import com.commercesuite.security.jwt.JwtTokenService;
 import com.commercesuite.security.service.HashUtil;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,7 @@ public class RefreshTokenService {
     private final RefreshTokenRepository repo;
     private final JwtTokenService jwt;
     private final Clock clock;
+    private final OutboxPublisher outbox;
 
     public record IssuedRefresh(String rawToken, RefreshToken entity) {}
 
@@ -48,6 +52,10 @@ public class RefreshTokenService {
         Instant now = Instant.now(clock);
         if (current.getRevokedAt() != null) {
             repo.revokeFamily(current.getFamilyId(), now);
+            outbox.publish(AuthEvents.AGGREGATE, current.getUserId().toString(),
+                    AuthEvents.REFRESH_TOKEN_REUSED,
+                    new AuthEvents.RefreshTokenReusedPayload(
+                            current.getUserId(), current.getFamilyId(), ip, now));
             throw AppException.unauthorized(ErrorCode.REFRESH_REUSE_DETECTED, "Refresh token reuse detected");
         }
         if (!current.isActive(now))
@@ -71,9 +79,10 @@ public class RefreshTokenService {
     }
 
     @Transactional
-    public void revoke(String rawPresented) {
-        repo.findByTokenHash(HashUtil.sha256(rawPresented))
-                .ifPresent(rt -> { if (rt.getRevokedAt() == null) rt.setRevokedAt(Instant.now(clock)); });
+    public Optional<UUID> revoke(String rawPresented) {
+        return repo.findByTokenHash(HashUtil.sha256(rawPresented))
+                .map(rt -> { if (rt.getRevokedAt() == null) rt.setRevokedAt(Instant.now(clock));
+                              return rt.getUserId(); });
     }
 
     @Transactional
