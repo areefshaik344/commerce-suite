@@ -1,0 +1,33 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: commerce_suite
+      POSTGRES_USER: cs
+      POSTGRES_PASSWORD: cs
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U cs -d commerce_suite"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  app:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/commerce_suite
+      DB_USER: cs
+      DB_PASSWORD: cs
+      JWT_SECRET: dev-secret-do-not-use-in-prod-min-32-bytes!!
+      CORS_ORIGINS: http://localhost:5173
+      SPRING_PROFILES_ACTIVE: dev
+    ports: ["8080:8080"]
+volumes: { pgdata: {} }

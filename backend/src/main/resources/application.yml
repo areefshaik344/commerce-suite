@@ -25,7 +25,6 @@ server:
 
 app:
   jwt:
-    # JWT_SECRET MUST be provided. No default. Startup fails otherwise.
     secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:commerce-suite}
     access-ttl-minutes: ${JWT_ACCESS_TTL_MIN:15}
@@ -43,6 +42,12 @@ app:
   pricing:
     tax-bps: ${PRICING_TAX_BPS:0}
     platform-fee-bps: ${PRICING_PLATFORM_FEE_BPS:0}
+  returns:
+    window-days: ${APP_RETURNS_WINDOW_DAYS:7}
+  secrets:
+    provider: ${SECRET_PROVIDER:env}
+  ratelimit:
+    enabled: ${RATELIMIT_ENABLED:true}
 
 springdoc:
   swagger-ui:
@@ -54,13 +59,25 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 logging:
+  pattern:
+    level: "%5p [%X{requestId:-},%X{actorId:-},%X{correlationId:-}]"
   level:
     root: INFO
-    com.commercesuite: DEBUG
+    com.commercesuite: INFO
     org.springframework.security: INFO
-
-  returns:
-    window-days: ${APP_RETURNS_WINDOW_DAYS:7}

@@ -58,7 +58,8 @@ public class SecurityConfig {
                         "/api/v1/auth/password/forgot",
                         "/api/v1/auth/password/reset",
                         "/api/v1/auth/email/verify").permitAll()
-                .requestMatchers("/actuator/health", "/actuator/info",
+                .requestMatchers("/actuator/health", "/actuator/health/**",
+                        "/actuator/info", "/actuator/prometheus",
                         "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/catalog/**").permitAll()
                 .anyRequest().authenticated())

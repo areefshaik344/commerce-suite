@@ -108,3 +108,44 @@ The platform is architecturally production-grade and feature-complete, but the *
 8. Author k6 load-test suite and capture baseline (MEDIUM 13).
 
 After (1)–(8), reissue this report.
+---
+
+## Addendum — Phase 9.5 hardening pass
+
+The Phase 9.5 implementation closed the BLOCKER and most HIGH findings:
+
+| Item | Status |
+|------|--------|
+| Dockerfile + compose                                | Resolved (`deployment/docker/`)           |
+| Kubernetes manifests + HPA + PDB + NetworkPolicy    | Resolved (`deployment/k8s/`)              |
+| Secret provider abstraction (env/AWS/Vault/Azure/GCP)| Resolved (`common.secrets`)              |
+| Rate limiting on auth + admin + webhook endpoints   | Resolved (`common.ratelimit`)             |
+| Security headers (CSP, HSTS, XFO, COOP, CORP, etc.) | Resolved (`SecurityHeadersFilter`)        |
+| MFA (TOTP + recovery codes)                         | Resolved (`mfa` module, V018)             |
+| Observability — Prometheus exporter, biz metrics    | Resolved (Micrometer + `BusinessMetrics`) |
+| Liveness/Readiness probes + custom health           | Resolved (`common.health`)                |
+| DLQ replay API for outbox/notifications/webhooks    | Resolved (`common.dlq`)                   |
+| CI: build, test, dep-scan, security-scan, image     | Resolved (`.github/workflows/`)           |
+
+### Updated scorecard
+
+| Dimension          | Before | After |
+|--------------------|--------|-------|
+| Security           | 7      | 9     |
+| Observability      | 5      | 8     |
+| Operability        | 6      | 8     |
+| Deployment         | 6      | 9     |
+| Business Continuity| 5      | 7     |
+| **Overall**        | 7.0    | 8.4   |
+
+### Remaining items (MEDIUM)
+
+- Nightly money reconciliation job
+- k6 load-test baseline
+- HIBP password check (toggle via Lovable Cloud setting)
+- Step-up auth on PII export
+- Documented JWT signing-key rotation drill
+
+### Final verdict
+
+> **READY FOR STAGING.** Promote to production once the MEDIUM list above is closed and the staging restore-from-backup drill (per `DISASTER_RECOVERY_PLAN.md` §4) is signed off.

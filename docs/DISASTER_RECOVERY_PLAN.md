@@ -92,3 +92,21 @@
 ## 7. Sign-off
 
 This plan is reviewed by Eng Lead, SRE, Security, and Finance every 6 months and after any production-impacting incident.
+---
+
+## Phase 9.5 verification checklist
+
+Quarterly drill (sign-off required before each production release):
+
+1. Snapshot production Postgres (managed PITR).
+2. Restore latest snapshot into a fresh staging cluster.
+3. Apply all Flyway migrations (V001–V018) — confirm `schema_version` ends at 18.
+4. Run smoke test suite against restored DB.
+5. Validate financial integrity:
+   - sum(payments captured) == sum(orders.paid_amount)
+   - sum(refunds) == sum(refund_ledger)
+   - settlement.calculation_hash reproducible
+6. Capture RPO (snapshot age) and RTO (restore wall-clock) — target RPO ≤ 5 min, RTO ≤ 60 min.
+7. File drill report in `docs/dr-drills/YYYY-MM.md`.
+
+A failed drill blocks the next production release.

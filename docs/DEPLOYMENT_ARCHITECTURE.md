@@ -86,3 +86,17 @@ Each environment has isolated DB, secrets, and webhook signing keys.
 ## 7. Disaster posture
 
 See `DISASTER_RECOVERY_PLAN.md`. Multi-AZ DB; daily snapshot to cross-region bucket; quarterly restore drill.
+---
+
+## Phase 9.5 deployment artifacts
+
+- `deployment/docker/Dockerfile` — multi-stage, non-root, tini PID 1, `/actuator/health/liveness` probe
+- `deployment/docker/docker-compose.yml` — local dev (Postgres + Redis + app)
+- `deployment/docker/docker-compose.prod.yml` — reference for non-k8s deploys
+- `deployment/k8s/` — Deployment (3 replicas, rolling, readOnlyRootFilesystem), Service (ClusterIP), Ingress (nginx + cert-manager), HPA (3–20 pods, CPU 70 / mem 80), PDB (`minAvailable: 2`), NetworkPolicy (allow ingress-nginx, egress to Postgres/Redis/443/DNS)
+
+### Pod-level hardening
+
+- runAsNonRoot, runAsUser 1000, drop all capabilities, allowPrivilegeEscalation false, readOnlyRootFilesystem true
+- Resource requests + limits (`500m`/`768Mi` → `2`/`2Gi`)
+- Prometheus annotations on pod for scrape discovery

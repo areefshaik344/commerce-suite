@@ -101,3 +101,28 @@ psql -c "SELECT id, event_type, last_error FROM outbox_events WHERE status='DEAD
 # Notification delivery counts last hour
 psql -c "SELECT channel, status, count(*) FROM notification_deliveries WHERE created_at > now() - interval '1 hour' GROUP BY 1,2;"
 ```
+---
+
+## DLQ replay (Phase 9.5)
+
+When the on-call sees a dead-letter alert:
+
+1. Identify channel: `outbox`, `notification`, or `webhook`.
+2. Read the count: `GET /api/v1/admin/dlq/{channel}/count`.
+3. Spot-check a sample row in the DB to confirm the underlying cause is resolved.
+4. Replay all: `POST /api/v1/admin/dlq/{channel}/replay`
+   Or one: `POST /api/v1/admin/dlq/{channel}/replay/{id}`
+5. Watch `outbox.deadletter` / `webhooks.failed` counters return to zero.
+
+Replay is idempotent: downstream consumers deduplicate by event id.
+
+## JWT signing-key rotation
+
+1. Generate new key, store in secret backend under `JWT_SECRET_NEXT`.
+2. Roll deployment with dual-`kid` support (next release).
+3. After full fleet is on the new build, promote `JWT_SECRET_NEXT` → `JWT_SECRET` and remove old key.
+4. Force refresh of all sessions if compromise suspected (truncate `refresh_tokens`).
+
+## MFA reset for an admin
+
+`UPDATE mfa_factors SET status='DISABLED' WHERE user_id = :id;` — user must re-enroll on next login.

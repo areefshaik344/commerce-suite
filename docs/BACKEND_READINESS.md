@@ -244,3 +244,16 @@ Phase 8.2 does NOT integrate real EMAIL/SMS/PUSH providers, webhooks, or analyti
 
 This closes the final Phase 8 sprint and resolves the webhook gap in
 `PLATFORM_INTEGRATION_AUDIT.md`.
+
+## Phase 9.5 — production hardening
+
+- Containerization, k8s manifests, HPA/PDB/NetworkPolicy
+- Pluggable `SecretProvider` (env / aws / vault / azure / gcp)
+- `RateLimitFilter` + `RateLimitService` on auth, admin, webhook routes
+- `SecurityHeadersFilter` (CSP, HSTS, XFO, COOP, CORP, Permissions-Policy)
+- MFA module (TOTP + recovery codes); mandatory for ADMIN/FINANCE via `MfaEnforcement`
+- `BusinessMetrics` + Micrometer Prometheus exporter
+- Custom health indicators: outbox, webhooks, notifications + liveness/readiness probes
+- `DeadLetterReplayService` + admin API for outbox/notification/webhook channels
+- CI workflows: build, test, dependency scan, security scan, docker build
+- Migration V018: `mfa_factors`, `mfa_recovery_codes`, `auth_lockouts`
