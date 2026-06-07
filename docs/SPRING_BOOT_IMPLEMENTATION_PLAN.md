@@ -755,3 +755,40 @@ Implemented `com.commercesuite.cart.*`, `com.commercesuite.coupon.*`, and `com.c
 - No analytics persistence yet.
 - No webhook subscriptions / signing yet.
 - Existing modules continue to use `AfterCommitEventPublisher` — incremental migration to `OutboxPublisher` will land alongside the webhook subscriber (Sprint 8.5).
+
+---
+
+## Phase 8.2 — Notification Module
+
+### Migration
+`V014__notification_module.sql`:
+- enum: `notification_status` (CREATED/QUEUED/PROCESSING/DELIVERED/FAILED/SUPPRESSED/EXPIRED)
+- tables: `notification_templates`, `notification_batches`, `notifications`, `notification_deliveries`, `notification_status_history`
+- triggers: `fn_touch_updated_at` for templates/notifications/deliveries
+- RLS: owner-only read+update on `notifications`; owner-only read on deliveries + history; templates readable when active
+- append-only: REVOKE UPDATE, DELETE on `notification_status_history`
+- seeds 16 IN_APP templates covering Auth/Vendor/Catalog/Order/Payment/Refund/Payout
+
+### Java packages
+- `com.commercesuite.notifications.domain` — 5 entities + status enum
+- `com.commercesuite.notifications.repository` — 5 Spring Data repos
+- `com.commercesuite.notifications.service` — FSM, renderer, template/preference/inbox/notification/delivery services
+- `com.commercesuite.notifications.delivery` — strategy SPI + InApp real, Email/SMS/Push stubs
+- `com.commercesuite.notifications.consumer.NotificationConsumer` — OutboxDispatchEvent listener
+- `com.commercesuite.notifications.controller` — `/api/v1/notifications/*`, `/api/v1/notification-templates`
+- `com.commercesuite.notifications.event.NotificationEvents` — 6 lifecycle events on outbox
+
+### Wiring
+- `NotificationConsumer` runs inside `OutboxDispatcher` TX (`Propagation.REQUIRED`); IN_APP delivery is synchronous, other channels are stubs.
+- AUTH+IN_APP is force-allowed in `NotificationPreferenceEvaluator`.
+- Suppression path persists the notification, emits `notification.suppressed`, and skips deliveries.
+- Per-delivery retry: 30s·2^(n-1), cap 1h, max 5 attempts (dead-letter when exhausted).
+
+### Tests
+- Unit: `NotificationStateMachineTest`, `TemplateRenderingTest`
+- IT: `NotificationInboxIT`, `NotificationDeliveryIT`, `NotificationPreferenceSuppressionIT`, `NotificationConsumerIT`
+
+### Phase boundaries
+- No real EMAIL/SMS/PUSH providers
+- No webhooks
+- No analytics persistence
