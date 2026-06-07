@@ -17,6 +17,7 @@ public class PermissionCatalog {
         Set<String> vendor = union(without(customer, APPLY_AS_VENDOR),
                 MANAGE_PRODUCTS, MANAGE_INVENTORY, MANAGE_VENDOR_ORDERS, MANAGE_VENDOR_RETURNS,
                 MANAGE_VENDOR_COUPONS, MANAGE_VENDOR_ADS, MANAGE_STORE_PROFILE,
+                MANAGE_VENDOR_PROFILE, VIEW_VENDOR_PAYOUTS,
                 VIEW_VENDOR_ANALYTICS, VIEW_VENDOR_FINANCIALS, RESPOND_TO_REVIEWS, MANAGE_DISPUTES);
 
         Set<String> admin = union(without(customer, APPLY_AS_VENDOR),
