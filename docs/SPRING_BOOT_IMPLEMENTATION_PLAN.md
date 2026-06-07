@@ -1,3 +1,12 @@
+## Phase 6.5 — Blocker resolution (delivered)
+
+- Migration `V011__phase6_5_blocker_resolution.sql`: enum extensions, FSM triggers, `idempotency_keys`, coupon partial-unique index + `used_count`, REVOKE DELETE on financial tables.
+- `com.commercesuite.common.idempotency` package (entity, repository, service).
+- `com.commercesuite.common.event.AfterCommitEventPublisher`.
+- `CouponRepository.findByCodeForUpdate` + `CouponService.resolve` now write-transactional with pessimistic lock.
+- Financial / audit entities stripped of `@SQLDelete` / `@SQLRestriction`.
+- Orphan `users` package removed.
+- Phase 7 (payments) MUST: (a) call `IdempotencyService.replayOrExecute` from every unsafe endpoint, (b) emit events through `AfterCommitEventPublisher`, (c) wire `pg_advisory_xact_lock` into `InventoryReservationService`, (d) implement largest-remainder allocation across vendor orders, (e) add `@RequiresPermission` to remaining controllers.
 ## Phase 3 — Catalog (delivered)
 - Migration: `V007__catalog_module.sql`
 - Package: `com.commercesuite.catalog.{entity,repository,service,dto,controller,event}`

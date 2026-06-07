@@ -17,7 +17,13 @@
 | LOW      | 7     |
 | **Total**| **35**|
 
-> **Verdict: 🔴 FIX BEFORE PHASE 7**
+> **Verdict (original, 2025-07-10): 🔴 FIX BEFORE PHASE 7**
+>
+> **Phase 6.5 update (2026-06-07): 🟢 SAFE FOR PHASE 7** — see
+> `docs/BLOCKER_RESOLUTION_REPORT.md` and
+> `docs/BACKEND_CONSISTENCY_AUDIT_DELTA.md`. All BLOCKERs resolved; all
+> HIGH findings closed or downgraded to MEDIUM with concrete Phase-7
+> follow-ups.
 >
 > Seven blockers must be resolved before any production traffic: the `idempotency_keys` table is entirely absent (PAYMENT_IDEMPOTENCY.md §2), Order FSM state names diverge from the frozen spec across both DB and Java, the coupon global-limit check has a TOCTOU race under concurrent load, financial entities carry `@SQLDelete` making audit trails defeatable, the DB FSM-assertion trigger (`fn_assert_child_transition`, `trg_rollup_parent_order`) is never created, event publication fires *inside* transactions instead of AFTER_COMMIT, and the `users` package contains orphan stubs that shadow the canonical `user` package.
 

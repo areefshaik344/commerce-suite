@@ -1,3 +1,12 @@
+## Phase 6.5 — Blocker Resolution (2026-06-07)
+
+- **Order FSM** now includes `PENDING_PAYMENT`, `PARTIALLY_DELIVERED`, `COMPLETED` per `ORDER_FSM.md`. `CREATED`/`CLOSED` retained as transitional aliases.
+- **DB FSM enforcement**: `fn_assert_child_transition` + `fn_rollup_parent_order` triggers (V011) guard vendor-order transitions and recompute parent rollup at the DB layer.
+- **Idempotency**: `public.idempotency_keys` table + `com.commercesuite.common.idempotency.IdempotencyService.replayOrExecute(...)` ready for Phase 7 wiring on `POST /orders`, `/payments/intents`, `/refunds`, `/payouts`.
+- **Coupon concurrency**: `CouponRepository.findByCodeForUpdate` + write-tx `resolve()` + `uq_coupon_usage_open` partial unique index.
+- **Financial entities** (`Order`, `VendorOrder`, `OrderItem`, `OrderStatusHistory`, refund tables, return tables, `InventoryReservation`, `TrackingEvent`) are append-only: no `@SQLDelete`, `REVOKE DELETE` on `authenticated`.
+- **Event safety**: `AfterCommitEventPublisher` defers domain-event publication until transaction commit. New `@EventListener`s MUST use `@TransactionalEventListener(phase = AFTER_COMMIT)`.
+- **Package cleanup**: orphan `com.commercesuite.users` deleted; canonical `com.commercesuite.user` retained.
 ## Phase 3 — Catalog (complete)
 Categories, Brands, Products (FSM), Variants (paise), Media metadata, dynamic Attributes, Moderation, Reviews. Migration `V007`. Specification-based search. Public catalog endpoints permitted in `SecurityConfig`. See `docs/CATALOG_MODULE.md`.
 # Backend Readiness Report
