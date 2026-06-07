@@ -49,6 +49,22 @@ app:
   ratelimit:
     enabled: ${RATELIMIT_ENABLED:true}
 
+outbox:
+  dispatcher:
+    delay-ms: ${OUTBOX_DISPATCHER_DELAY_MS:500}
+    batch-size: ${OUTBOX_DISPATCHER_BATCH:100}
+  retry:
+    base-seconds: ${OUTBOX_RETRY_BASE_SECONDS:5}
+    max-seconds: ${OUTBOX_RETRY_MAX_SECONDS:3600}
+    max-attempts: ${OUTBOX_RETRY_MAX_ATTEMPTS:10}
+
+webhooks:
+  dispatcher:
+    enabled: ${WEBHOOKS_DISPATCHER_ENABLED:true}
+    delay-ms: ${WEBHOOKS_DISPATCHER_DELAY_MS:1000}
+    batch-size: ${WEBHOOKS_DISPATCHER_BATCH:50}
+    per-endpoint-concurrency: ${WEBHOOKS_PER_ENDPOINT_CONCURRENCY:4}
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
