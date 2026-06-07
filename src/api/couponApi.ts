@@ -7,6 +7,8 @@
 import { simulateDelay, mockSuccess, ApiError, type ApiResponse } from "./apiClient";
 import type { AppliedCoupon, CouponDto } from "@/types/checkout";
 import { computeCouponDiscount, isCouponStructurallyValid } from "@/lib/pricing";
+import { httpClient, USE_REAL_API } from "./httpClient";
+import { couponResultToApplied, type BackendCouponValidationResult } from "./cartCheckoutAdapter";
 
 const REGISTRY: Record<string, CouponDto> = {
   SAVE10:        { code: "SAVE10",        label: "10% off (max ₹2000)",       type: "PERCENT", value: 10, scope: "GLOBAL", minOrder: 1000, maxDiscount: 2000, expiresAt: "2026-12-31", usageLimit: 1000, usedCount: 45 },
@@ -40,6 +42,21 @@ export const couponApi = {
   },
 
   async validateCoupon(req: ValidateCouponRequest): Promise<ApiResponse<ValidateCouponResult>> {
+    if (USE_REAL_API) {
+      try {
+        const res = await httpClient.post<BackendCouponValidationResult>(
+          "/coupons/validate",
+          { code: req.code.trim().toUpperCase() },
+        );
+        if (!res.data.valid) {
+          throw new ApiError(res.data.message || "Coupon invalid", 400, "COUPON_INVALID");
+        }
+        const hint = REGISTRY[res.data.code.toUpperCase()] ?? null;
+        return mockSuccess(couponResultToApplied(res.data, hint), res.data.message || "Coupon applied");
+      } catch (err) {
+        if (err instanceof ApiError) throw err; // surface backend rejection verbatim
+      }
+    }
     await simulateDelay(250);
     const coupon = REGISTRY[req.code.trim().toUpperCase()];
     if (!coupon) throw new ApiError("Invalid coupon code", 404, "COUPON_NOT_FOUND");
