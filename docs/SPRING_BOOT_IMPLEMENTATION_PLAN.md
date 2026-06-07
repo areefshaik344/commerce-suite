@@ -18,7 +18,7 @@ Strict left-to-right ordering — later phases assume earlier phases are merged,
 | # | Phase | Goal | Exit criteria |
 |---|-------|------|---------------|
 | 1 | Auth + RBAC + Users | Login, refresh, roles, ownership, GDPR contract | `/auth/*` + `/me` green; `has_role()` used by every guard |
-| 2 | Vendor | Onboarding, KYC, application review, public store | Vendor APPROVED transition E2E; penny-drop integrated |
+| 2 | Vendor | Onboarding, KYC, application review, public store | **Phase 2 complete:** Vendor FSM enforced, application apply/approve/reject/suspend/reactivate/deactivate E2E, documents + bank metadata stored, events published. Penny-drop integration deferred (placeholder fields present). See `docs/VENDOR_MODULE.md`. |
 | 3 | Catalog | Categories, products, variants, images, reviews | Listing + PDP fully served from API; moderation queue live |
 | 4 | Inventory | Stock buckets, reservations, low-stock alerts | TTL sweeper passing chaos test; alerts wired to notifications |
 | 5 | Cart | Server cart + anonymous merge + price-drift | Cart merge contract verified; checkout entry triggers reservation |

@@ -83,3 +83,22 @@ Every public-schema table requires explicit `GRANT` to `authenticated` and `serv
 | Soft delete           | `@SQLDelete` + `@SQLRestriction("deleted_at IS NULL")` on `User`, `Profile`, `Address`, `RefreshToken`.        |
 | Migration V005        | Adds `created_by`/`updated_by` to user-facing tables; adds `deleted_at` to `profiles` and `refresh_tokens`.    |
 | Integration tests     | `AuthControllerIT`, `RefreshTokenRotationIT`, `RBACPermissionIT` via Spring Boot + Testcontainers Postgres 16. |
+
+---
+
+## Phase 2 — Vendor module (applied)
+
+| Area              | Change                                                                                                  |
+|-------------------|---------------------------------------------------------------------------------------------------------|
+| Migration         | `V006__vendor_module.sql` — 7 tables + 4 enums + grants (`anon` SELECT only on `vendor_profiles`).      |
+| Entities          | `Vendor`, `VendorProfile`, `VendorApplication`, `VendorVerification`, `VendorBankAccount`, `VendorDocument`, `VendorStatusHistory`. |
+| State machine     | `VendorStateMachine` enforces `VendorStatus` FSM; every transition recorded in `vendor_status_history`. |
+| Permissions       | Added `MANAGE_VENDOR_PROFILE`, `VIEW_VENDOR_PAYOUTS`. Catalog updated for vendor role.                  |
+| Services          | `VendorService`, `VendorApplicationService`, `VendorBankService`, `VendorVerificationService`, `VendorAdminService`. |
+| Ownership         | `VendorOwnershipGuard` derives vendor from `ActorContext.userId()` on every self-service call.          |
+| Controllers       | `VendorController` (10 endpoints), `AdminVendorController` (7 endpoints).                                |
+| Events            | `VendorApplied/Approved/Rejected/Suspended/Reactivated/Deactivated` via `ApplicationEventPublisher`.    |
+| Tests             | `VendorStateMachineTest`, `VendorApplicationIT`, `VendorApprovalIT`, `VendorOwnershipIT`, `VendorPermissionIT`. |
+| Docs              | `docs/VENDOR_MODULE.md`.                                                                                |
+
+Out of Phase 2 scope (still pending): file storage for documents, penny-drop bank verification, public storefront read API, vendor payouts.
