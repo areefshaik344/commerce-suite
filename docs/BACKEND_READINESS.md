@@ -7,6 +7,22 @@
 - **Financial entities** (`Order`, `VendorOrder`, `OrderItem`, `OrderStatusHistory`, refund tables, return tables, `InventoryReservation`, `TrackingEvent`) are append-only: no `@SQLDelete`, `REVOKE DELETE` on `authenticated`.
 - **Event safety**: `AfterCommitEventPublisher` defers domain-event publication until transaction commit. New `@EventListener`s MUST use `@TransactionalEventListener(phase = AFTER_COMMIT)`.
 - **Package cleanup**: orphan `com.commercesuite.users` deleted; canonical `com.commercesuite.user` retained.
+
+## Phase 7 — Payments, Commission, Settlement, Payouts (2026-06-07)
+
+- `payment_intents`, `payment_attempts`, `payment_transactions`,
+  `commission_rules`/`commission_calculations`, `settlements`/`settlement_lines`,
+  `payout_batches`/`vendor_payouts` shipped in migration V012 with
+  FSM-enforcing triggers and `REVOKE DELETE` on all financial tables.
+- Payment, Refund, Payout endpoints wired to `IdempotencyService` and
+  `AfterCommitEventPublisher`.
+- Commission engine supports PERCENTAGE, FIXED_AMOUNT and TIERED rules using
+  `Math.floorDiv` + largest-remainder allocation; rules are snapshotted in
+  `commission_calculations` for reproducibility.
+- Settlement calculator hashes inputs (`calculation_hash`) so reruns are
+  byte-equal across environments.
+- `RefundProcessor` enforces `refundableRemainingPaise` (MoneySpec §4).
+- Remaining blockers (5) and (6) above are now CLOSED.
 ## Phase 3 — Catalog (complete)
 Categories, Brands, Products (FSM), Variants (paise), Media metadata, dynamic Attributes, Moderation, Reviews. Migration `V007`. Specification-based search. Public catalog endpoints permitted in `SecurityConfig`. See `docs/CATALOG_MODULE.md`.
 # Backend Readiness Report
