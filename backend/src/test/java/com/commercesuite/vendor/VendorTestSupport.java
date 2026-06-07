@@ -1,6 +1,7 @@
 package com.commercesuite.vendor;
 
 import com.commercesuite.auth.dto.SignupRequest;
+import com.commercesuite.auth.dto.LoginRequest;
 import com.commercesuite.auth.service.AuthService;
 import com.commercesuite.rbac.entity.AppRole;
 import com.commercesuite.rbac.service.RoleService;
@@ -10,28 +11,21 @@ import java.util.UUID;
 public final class VendorTestSupport {
     private VendorTestSupport() {}
 
-    public static String signupCustomer(AuthService auth, String prefix) {
-        var res = auth.signup(new SignupRequest(prefix + "+" + UUID.randomUUID() + "@example.com",
-                "Str0ng!Pwd", prefix, null, AppRole.CUSTOMER), "ua", "127.0.0.1");
-        return res.tokens().accessToken();
+    public record TestUser(String email, String token, UUID userId) {}
+
+    public static TestUser signupCustomer(AuthService auth, String prefix) {
+        String email = prefix + "+" + UUID.randomUUID() + "@example.com";
+        var res = auth.signup(new SignupRequest(email, "Str0ng!Pwd", prefix, null, AppRole.CUSTOMER),
+                "ua", "127.0.0.1");
+        return new TestUser(email, res.tokens().accessToken(), res.userId());
     }
 
-    public static String[] signupCustomerWithUserId(AuthService auth, String prefix) {
-        var res = auth.signup(new SignupRequest(prefix + "+" + UUID.randomUUID() + "@example.com",
-                "Str0ng!Pwd", prefix, null, AppRole.CUSTOMER), "ua", "127.0.0.1");
-        return new String[]{ res.tokens().accessToken(), res.userId().toString() };
-    }
-
-    public static String signupAdmin(AuthService auth, RoleService roles, String prefix) {
-        // self-registration as ADMIN is blocked, so register CUSTOMER then grant ADMIN.
-        var res = auth.signup(new SignupRequest(prefix + "+" + UUID.randomUUID() + "@example.com",
-                "Str0ng!Pwd", prefix, null, AppRole.CUSTOMER), "ua", "127.0.0.1");
-        roles.grant(res.userId(), AppRole.ADMIN, null);
-        // Re-issue tokens by logging in again so the JWT carries the new role.
-        var login = auth.login(new com.commercesuite.auth.dto.LoginRequest(
-                "ignored", "Str0ng!Pwd"), "ua", "127.0.0.1");
-        // We can't easily look up email here; just rotate via refresh path:
-        return res.tokens().accessToken();
+    /** Register a customer, promote to ADMIN, then re-login so the JWT carries the ADMIN role. */
+    public static TestUser signupAdmin(AuthService auth, RoleService roles, String prefix) {
+        TestUser u = signupCustomer(auth, prefix);
+        roles.grant(u.userId(), AppRole.ADMIN, null);
+        var login = auth.login(new LoginRequest(u.email(), "Str0ng!Pwd"), "ua", "127.0.0.1");
+        return new TestUser(u.email(), login.tokens().accessToken(), u.userId());
     }
 
     public static ApplyVendorRequest sampleApply() {
