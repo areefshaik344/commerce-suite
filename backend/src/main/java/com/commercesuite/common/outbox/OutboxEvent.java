@@ -39,9 +39,8 @@ public class OutboxEvent {
     @JdbcTypeCode(SqlTypes.JSON)
     private String headers;
 
-    @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.STRING) @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false, columnDefinition = "outbox_status")
-    @org.hibernate.annotations.JdbcType(org.hibernate.dialect.PostgreSQLEnumJdbcType.class)
     private OutboxStatus status;
 
     @Column(name = "attempt_count", nullable = false) private int attemptCount;
