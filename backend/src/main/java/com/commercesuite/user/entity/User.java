@@ -1,21 +1,23 @@
 package com.commercesuite.user.entity;
 
+import com.commercesuite.common.entity.AuditableEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
-import java.util.UUID;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "users")
 @Getter @Setter
-@NoArgsConstructor @AllArgsConstructor @Builder
-public class User {
-
-    @Id @GeneratedValue
-    @JdbcTypeCode(SqlTypes.UUID)
-    private UUID id;
+@NoArgsConstructor
+@SuperBuilder
+@SQLDelete(sql = "UPDATE users SET deleted_at = now(), updated_at = now() WHERE id = ? AND version = ?")
+@SQLRestriction("deleted_at IS NULL")
+public class User extends AuditableEntity {
 
     @Column(nullable = false, unique = true, columnDefinition = "citext")
     private String email;
@@ -40,18 +42,7 @@ public class User {
     @Column(name = "locked_until") private Instant lockedUntil;
     @Column(name = "last_login_at") private Instant lastLoginAt;
 
-    @Column(name = "created_at", nullable = false) private Instant createdAt;
-    @Column(name = "updated_at", nullable = false) private Instant updatedAt;
-    @Column(name = "deleted_at") private Instant deletedAt;
-
-    @Version
-    @Column(name = "version", nullable = false) private long version;
-
-    @PrePersist void onCreate() {
-        Instant now = Instant.now();
-        if (createdAt == null) createdAt = now;
-        updatedAt = now;
+    @PrePersist void defaults() {
         if (accountStatus == null) accountStatus = AccountStatus.PENDING_VERIFICATION;
     }
-    @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
 }

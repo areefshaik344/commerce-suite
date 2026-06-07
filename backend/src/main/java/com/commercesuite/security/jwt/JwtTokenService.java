@@ -3,6 +3,7 @@ package com.commercesuite.security.jwt;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.*;
 import javax.crypto.SecretKey;
@@ -12,16 +13,21 @@ import org.springframework.stereotype.Service;
 public class JwtTokenService {
     private final JwtProperties props;
     private final SecretKey key;
+    private final Clock clock;
 
-    public JwtTokenService(JwtProperties props) {
-        this.props = props;
+    public JwtTokenService(JwtProperties props, Clock clock) {
+        if (props.secret() == null || props.secret().isBlank())
+            throw new IllegalStateException("JWT_SECRET env var is required and was not provided");
         byte[] secret = props.secret().getBytes(StandardCharsets.UTF_8);
-        if (secret.length < 32) throw new IllegalStateException("JWT secret must be >= 32 bytes");
+        if (secret.length < 32)
+            throw new IllegalStateException("JWT_SECRET must be at least 32 bytes (got " + secret.length + ")");
+        this.props = props;
+        this.clock = clock;
         this.key = Keys.hmacShaKeyFor(secret);
     }
 
     public String issueAccessToken(UUID userId, Set<String> roles, Set<String> permissions) {
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         return Jwts.builder()
                 .issuer(props.issuer())
                 .subject(userId.toString())

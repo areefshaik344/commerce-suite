@@ -70,3 +70,16 @@ Every public-schema table requires explicit `GRANT` to `authenticated` and `serv
 - Webhook outbox signed with HMAC, includes `requestId` for end-to-end correlation.
 - GDPR deletion enforces a 30-day grace period; user can cancel during grace.
 - Audit log is append-only (`INSERT`-only RLS, no `UPDATE`/`DELETE` for any role except `service_role`).
+---
+
+## Phase 1 Hardening (applied)
+
+| Area                  | Change                                                                                                         |
+|-----------------------|----------------------------------------------------------------------------------------------------------------|
+| Entity base classes   | `BaseEntity` (UUID id + @Version), `AuditableEntity` (createdAt/updatedAt/createdBy/updatedBy + deletedAt).    |
+| JPA auditing          | `@EnableJpaAuditing` + `AuditorAware<UUID>` backed by `ActorContextHolder`.                                    |
+| Clock abstraction     | `Clock` bean (`Clock.systemUTC()`); all services use `Instant.now(clock)` — no raw `Instant.now()` in domain.  |
+| JWT secret hardening  | `application.yml` no longer provides a default. `JwtTokenService` rejects null/blank/< 32-byte secrets.        |
+| Soft delete           | `@SQLDelete` + `@SQLRestriction("deleted_at IS NULL")` on `User`, `Profile`, `Address`, `RefreshToken`.        |
+| Migration V005        | Adds `created_by`/`updated_by` to user-facing tables; adds `deleted_at` to `profiles` and `refresh_tokens`.    |
+| Integration tests     | `AuthControllerIT`, `RefreshTokenRotationIT`, `RBACPermissionIT` via Spring Boot + Testcontainers Postgres 16. |

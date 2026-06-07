@@ -17,6 +17,7 @@ import com.commercesuite.user.entity.Profile;
 import com.commercesuite.user.entity.User;
 import com.commercesuite.user.repository.ProfileRepository;
 import com.commercesuite.user.repository.UserRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Set;
@@ -34,7 +35,7 @@ public class AuthService {
 
     private static final int  MAX_FAILED   = 5;
     private static final int  LOCK_MINUTES = 15;
-    private static final long EMAIL_TOKEN_HOURS = 24;
+    private static final long EMAIL_TOKEN_HOURS  = 24;
     private static final long RESET_TOKEN_MINUTES = 30;
 
     private final UserRepository userRepo;
@@ -47,8 +48,8 @@ public class AuthService {
     private final AccountStatusGuard statusGuard;
     private final EmailVerificationTokenRepository evtRepo;
     private final PasswordResetTokenRepository prtRepo;
+    private final Clock clock;
 
-    /* --------------- SIGNUP --------------- */
     @Transactional
     public AuthResult signup(SignupRequest req, String userAgent, String ip) {
         AppRole role = req.requestedRole() == null ? AppRole.CUSTOMER : req.requestedRole();
@@ -77,11 +78,9 @@ public class AuthService {
 
         String verifyToken = issueEmailVerificationToken(u.getId());
         log.info("[signup] user={} role={} verifyTokenIssued", u.getId(), role);
-
         return issueTokens(u, userAgent, ip, verifyToken);
     }
 
-    /* --------------- LOGIN --------------- */
     @Transactional
     public AuthResult login(LoginRequest req, String userAgent, String ip) {
         User u = userRepo.findByEmailIgnoreCase(req.email().trim())
@@ -90,16 +89,15 @@ public class AuthService {
         if (!encoder.matches(req.password(), u.getPasswordHash())) {
             u.setFailedLoginCount(u.getFailedLoginCount() + 1);
             if (u.getFailedLoginCount() >= MAX_FAILED)
-                u.setLockedUntil(Instant.now().plus(LOCK_MINUTES, ChronoUnit.MINUTES));
+                u.setLockedUntil(Instant.now(clock).plus(LOCK_MINUTES, ChronoUnit.MINUTES));
             throw AppException.unauthorized(ErrorCode.INVALID_CREDENTIALS, "Invalid credentials");
         }
         u.setFailedLoginCount(0);
         u.setLockedUntil(null);
-        u.setLastLoginAt(Instant.now());
+        u.setLastLoginAt(Instant.now(clock));
         return issueTokens(u, userAgent, ip, null);
     }
 
-    /* --------------- REFRESH --------------- */
     @Transactional
     public TokenResponse refresh(String rawRefresh, String userAgent, String ip) {
         var rotated = refreshService.rotate(rawRefresh, userAgent, ip);
@@ -109,46 +107,43 @@ public class AuthService {
         return buildTokenResponse(u, rotated.rawToken());
     }
 
-    /* --------------- LOGOUT --------------- */
-    @Transactional public void logout(String rawRefresh)          { refreshService.revoke(rawRefresh); }
-    @Transactional public int  logoutAll(UUID userId)             { return refreshService.revokeAllForUser(userId); }
+    @Transactional public void logout(String rawRefresh) { refreshService.revoke(rawRefresh); }
+    @Transactional public int  logoutAll(UUID userId)     { return refreshService.revokeAllForUser(userId); }
 
-    /* --------------- EMAIL VERIFICATION --------------- */
     @Transactional
     public void verifyEmail(String rawToken) {
         EmailVerificationToken t = evtRepo.findByTokenHash(HashUtil.sha256(rawToken))
                 .orElseThrow(() -> AppException.badRequest(ErrorCode.TOKEN_INVALID, "Invalid verification token"));
+        Instant now = Instant.now(clock);
         if (t.getConsumedAt() != null) throw AppException.badRequest(ErrorCode.TOKEN_INVALID, "Token already used");
-        if (t.getExpiresAt().isBefore(Instant.now()))
+        if (t.getExpiresAt().isBefore(now))
             throw AppException.badRequest(ErrorCode.TOKEN_EXPIRED, "Verification token expired");
-        User u = userRepo.findById(t.getUserId())
-                .orElseThrow(() -> AppException.notFound("User"));
-        u.setEmailVerifiedAt(Instant.now());
+        User u = userRepo.findById(t.getUserId()).orElseThrow(() -> AppException.notFound("User"));
+        u.setEmailVerifiedAt(now);
         if (u.getAccountStatus() == AccountStatus.PENDING_VERIFICATION)
             u.setAccountStatus(AccountStatus.ACTIVE);
-        t.setConsumedAt(Instant.now());
+        t.setConsumedAt(now);
     }
 
     public String issueEmailVerificationToken(UUID userId) {
         String raw = HashUtil.randomToken(32);
         evtRepo.save(EmailVerificationToken.builder()
                 .userId(userId).tokenHash(HashUtil.sha256(raw))
-                .expiresAt(Instant.now().plus(EMAIL_TOKEN_HOURS, ChronoUnit.HOURS)).build());
+                .createdAt(Instant.now(clock))
+                .expiresAt(Instant.now(clock).plus(EMAIL_TOKEN_HOURS, ChronoUnit.HOURS)).build());
         return raw;
     }
 
-    /* --------------- PASSWORD RESET --------------- */
     @Transactional
     public void forgotPassword(String email) {
         userRepo.findByEmailIgnoreCase(email.trim()).ifPresent(u -> {
             String raw = HashUtil.randomToken(32);
             prtRepo.save(PasswordResetToken.builder()
                     .userId(u.getId()).tokenHash(HashUtil.sha256(raw))
-                    .expiresAt(Instant.now().plus(RESET_TOKEN_MINUTES, ChronoUnit.MINUTES)).build());
+                    .createdAt(Instant.now(clock))
+                    .expiresAt(Instant.now(clock).plus(RESET_TOKEN_MINUTES, ChronoUnit.MINUTES)).build());
             log.info("[forgot-password] user={} resetTokenIssued", u.getId());
-            // Email dispatch wired in a later phase.
         });
-        // Always 204 to avoid email enumeration.
     }
 
     @Transactional
@@ -156,12 +151,13 @@ public class AuthService {
         passwordPolicy.validate(newPassword);
         PasswordResetToken t = prtRepo.findByTokenHash(HashUtil.sha256(rawToken))
                 .orElseThrow(() -> AppException.badRequest(ErrorCode.TOKEN_INVALID, "Invalid reset token"));
+        Instant now = Instant.now(clock);
         if (t.getConsumedAt() != null) throw AppException.badRequest(ErrorCode.TOKEN_INVALID, "Token already used");
-        if (t.getExpiresAt().isBefore(Instant.now()))
+        if (t.getExpiresAt().isBefore(now))
             throw AppException.badRequest(ErrorCode.TOKEN_EXPIRED, "Reset token expired");
         User u = userRepo.findById(t.getUserId()).orElseThrow(() -> AppException.notFound("User"));
         u.setPasswordHash(encoder.encode(newPassword));
-        t.setConsumedAt(Instant.now());
+        t.setConsumedAt(now);
         refreshService.revokeAllForUser(u.getId());
     }
 
@@ -177,7 +173,6 @@ public class AuthService {
         refreshService.revokeAllForUser(userId);
     }
 
-    /* --------------- HELPERS --------------- */
     public record AuthResult(TokenResponse tokens, UUID userId, String emailVerificationToken) {}
 
     private AuthResult issueTokens(User u, String userAgent, String ip, String verifyToken) {

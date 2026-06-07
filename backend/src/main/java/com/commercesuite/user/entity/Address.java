@@ -1,20 +1,23 @@
 package com.commercesuite.user.entity;
 
+import com.commercesuite.common.entity.AuditableEntity;
 import jakarta.persistence.*;
-import java.time.Instant;
 import java.util.UUID;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "addresses")
 @Getter @Setter
-@NoArgsConstructor @AllArgsConstructor @Builder
-public class Address {
-    @Id @GeneratedValue
-    @JdbcTypeCode(SqlTypes.UUID)
-    private UUID id;
+@NoArgsConstructor
+@SuperBuilder
+@SQLDelete(sql = "UPDATE addresses SET deleted_at = now(), updated_at = now(), is_default = false WHERE id = ? AND version = ?")
+@SQLRestriction("deleted_at IS NULL")
+public class Address extends AuditableEntity {
 
     @Column(name = "user_id", nullable = false)
     @JdbcTypeCode(SqlTypes.UUID)
@@ -36,18 +39,8 @@ public class Address {
 
     @Column(name = "is_default", nullable = false) private boolean isDefault;
 
-    @Column(name = "created_at", nullable = false) private Instant createdAt;
-    @Column(name = "updated_at", nullable = false) private Instant updatedAt;
-    @Column(name = "deleted_at") private Instant deletedAt;
-
-    @Version private long version;
-
-    @PrePersist void onCreate() {
-        Instant now = Instant.now();
-        if (createdAt == null) createdAt = now;
-        updatedAt = now;
+    @PrePersist void defaults() {
         if (country == null) country = "IN";
-        if (type == null) type = AddressType.HOME;
+        if (type    == null) type    = AddressType.HOME;
     }
-    @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
 }

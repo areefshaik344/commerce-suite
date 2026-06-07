@@ -25,8 +25,9 @@ server:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:change-me-please-this-is-only-for-local-development-and-must-be-at-least-64-bytes-long-xx}
-    issuer: commerce-suite
+    # JWT_SECRET MUST be provided. No default. Startup fails otherwise.
+    secret: ${JWT_SECRET}
+    issuer: ${JWT_ISSUER:commerce-suite}
     access-ttl-minutes: ${JWT_ACCESS_TTL_MIN:15}
     refresh-ttl-days: ${JWT_REFRESH_TTL_DAYS:30}
   cors:

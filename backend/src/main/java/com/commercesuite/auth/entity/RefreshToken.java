@@ -4,13 +4,19 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "refresh_tokens")
 @Getter @Setter
-@NoArgsConstructor @AllArgsConstructor @Builder
+@NoArgsConstructor
+@SuperBuilder
+@SQLDelete(sql = "UPDATE refresh_tokens SET deleted_at = now() WHERE id = ?")
+@SQLRestriction("deleted_at IS NULL")
 public class RefreshToken {
     @Id @GeneratedValue @JdbcTypeCode(SqlTypes.UUID) private UUID id;
     @Column(name = "user_id", nullable = false) @JdbcTypeCode(SqlTypes.UUID) private UUID userId;
@@ -22,8 +28,9 @@ public class RefreshToken {
     @Column(name = "revoked_at") private Instant revokedAt;
     @Column(name = "reuse_detected", nullable = false) private boolean reuseDetected;
     @Column(name = "user_agent", length = 255) private String userAgent;
-    @Column(name = "ip_address", length = 45) private String ipAddress;
+    @Column(name = "ip_address", length = 45)  private String ipAddress;
+    @Column(name = "deleted_at") private Instant deletedAt;
 
-    @PrePersist void onCreate() { if (issuedAt == null) issuedAt = Instant.now(); }
-    public boolean isActive(Instant now) { return revokedAt == null && now.isBefore(expiresAt); }
+    public boolean isActive(Instant now) { return revokedAt == null && deletedAt == null && now.isBefore(expiresAt); }
+    public boolean isDeleted() { return deletedAt != null; }
 }
