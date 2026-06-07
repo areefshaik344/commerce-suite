@@ -7,6 +7,44 @@
 - Financial / audit entities stripped of `@SQLDelete` / `@SQLRestriction`.
 - Orphan `users` package removed.
 - Phase 7 (payments) MUST: (a) call `IdempotencyService.replayOrExecute` from every unsafe endpoint, (b) emit events through `AfterCommitEventPublisher`, (c) wire `pg_advisory_xact_lock` into `InventoryReservationService`, (d) implement largest-remainder allocation across vendor orders, (e) add `@RequiresPermission` to remaining controllers.
+
+## Phase 7 — Payments, Commission, Settlement, Payouts (delivered 2026-06-07)
+
+- Migration `V012__payments_commission_settlement_payouts.sql` adds
+  `payment_intents`, `payment_attempts`, `payment_transactions`,
+  `payment_status_history`, `commission_rules`, `commission_calculations`,
+  `settlements`, `settlement_lines`, `settlement_status_history`,
+  `payout_batches`, `vendor_payouts`, `payout_status_history`,
+  plus FSM-enforcing triggers (`fn_assert_payment_transition`,
+  `fn_assert_settlement_transition`, `fn_assert_payout_transition`) and
+  `REVOKE DELETE` on every financial table.
+- Modules: `com.commercesuite.payments`, `commission`, `settlement`, `payouts`.
+- Idempotency: `POST /payments/intents`, `POST /payments/{id}/retry`,
+  `POST /refunds`, `POST /payouts/batches` all flow through
+  `IdempotencyService.replayOrExecute` (PAYMENT_IDEMPOTENCY.md key shape).
+- Events: `PaymentCapturedEvent`, `PaymentFailedEvent`, `RefundProcessedEvent`,
+  `SettlementLockedEvent`, `SettlementPaidEvent`, `PayoutBatchPaidEvent`
+  published exclusively through `AfterCommitEventPublisher`.
+- Money: all amounts paise (`BigInteger`/`long`); commission tiers and
+  settlement rollups use `Math.floorDiv` + largest-remainder for
+  deterministic allocation. Settlement `calculation_hash` (SHA-256 over
+  sorted `vendor_order_id|gross|commission|tax|adjustment` lines) makes
+  every calculation reproducible.
+- FSMs:
+  - Payment: `REQUIRES_ACTION → PROCESSING → (AUTHORIZED) → CAPTURED → (PARTIALLY_REFUNDED → REFUNDED)`; terminal `FAILED`, `CANCELLED`.
+  - Settlement: `PENDING → CALCULATED → LOCKED → PAID`; terminal `VOIDED`.
+  - Payout batch: `DRAFT → SUBMITTED → PROCESSING → PAID`; terminal `FAILED`.
+- Refund bridge: `RefundProcessor` honours `refundableRemainingPaise`
+  (MoneySpec §4) and writes `payment_transactions(type=REFUND)` against
+  the originating `PaymentIntent`.
+- Ownership guards added: `PaymentOwnershipGuard`,
+  `SettlementOwnershipGuard`, `PayoutOwnershipGuard`.
+- Tests: `PaymentStateMachineTest`, `SettlementStateMachineTest`,
+  `PayoutStateMachineTest`, `CommissionCalculatorTest`.
+- See `docs/PAYMENTS_PAYOUTS_MODULE.md` for API contracts, FSM diagrams
+  and schema.
+- Verification: JDK/Gradle not available in the doc-sync sandbox; run
+  `./gradlew test` in a JDK 21 environment before tagging the release.
 ## Phase 3 — Catalog (delivered)
 - Migration: `V007__catalog_module.sql`
 - Package: `com.commercesuite.catalog.{entity,repository,service,dto,controller,event}`
