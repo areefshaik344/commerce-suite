@@ -11,6 +11,7 @@ public record AuditContext(
         String entityId,
         AuditAction action,
         AuditSeverity severity,
+        AuditCategory category,
         Map<String, Object> metadata,
         String requestId,
         String correlationId,
@@ -20,6 +21,7 @@ public record AuditContext(
     public static AuditContext of(AuditActorType actorType, AuditAction action,
                                   String entityType, String entityId) {
         return new AuditContext(null, actorType, entityType, entityId, action,
-                AuditSeverity.INFO, Map.of(), null, null, null, null);
+                AuditSeverity.INFO, AuditCategory.SYSTEM, Map.of(),
+                null, null, null, null);
     }
 }
