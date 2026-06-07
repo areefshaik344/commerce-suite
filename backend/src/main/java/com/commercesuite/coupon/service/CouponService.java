@@ -32,9 +32,11 @@ public class CouponService {
     private final Clock clock;
 
     /** Load and check active window + limits. Throws AppException with friendly message. */
-    @Transactional(readOnly = true)
+    /** BLOCKER B-04: must run inside a write tx and pessimistically lock the
+     *  coupon row before reading aggregated usage counts. */
+    @Transactional
     public Coupon resolve(String code, UUID userId, long subtotalPaise, List<CartItem> items) {
-        Coupon c = couponRepo.findByCodeIgnoreCase(code)
+        Coupon c = couponRepo.findByCodeForUpdate(code)
                 .orElseThrow(() -> AppException.notFound("Coupon"));
         Instant now = Instant.now(clock);
         if (!c.isActive())                       reject(userId, code, "Coupon inactive");
