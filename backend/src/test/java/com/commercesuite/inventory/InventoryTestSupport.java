@@ -50,10 +50,14 @@ public final class InventoryTestSupport {
                 catalog.permissionsFor(role), "test-req");
     }
 
-    /** Convenience used when permission catalog is not needed (skips permission set). */
+    /** Convenience: builds an ActorContext carrying only role-appropriate permissions. */
     public static ActorContext actorOf(TestUser u, AppRole role) {
-        return new ActorContext(u.userId(), Set.of(role.name()),
-                Set.of("MANAGE_INVENTORY","MANAGE_PRODUCTS","MODERATE_PRODUCTS"), "test-req");
+        Set<String> perms = switch (role) {
+            case VENDOR -> Set.of("MANAGE_INVENTORY","MANAGE_PRODUCTS","MANAGE_VENDOR_PROFILE");
+            case ADMIN, SUPER_ADMIN -> Set.of("MODERATE_PRODUCTS","MANAGE_USERS","MANAGE_VENDORS");
+            default -> Set.of();
+        };
+        return new ActorContext(u.userId(), Set.of(role.name()), perms, "test-req");
     }
 
     public static InventoryItem seedInventory(InventoryItemRepository repo,
