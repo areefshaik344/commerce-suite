@@ -62,6 +62,7 @@ public class SecurityConfig {
                         "/actuator/info", "/actuator/prometheus",
                         "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/catalog/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/storefront/**").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(eh -> eh
                 .authenticationEntryPoint((req, res, ex) -> write(mapper, res, HttpServletResponse.SC_UNAUTHORIZED,
