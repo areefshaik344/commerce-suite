@@ -5,6 +5,7 @@ import com.commercesuite.user.dto.AddressDto;
 import com.commercesuite.user.dto.UpsertAddressRequest;
 import com.commercesuite.user.entity.Address;
 import com.commercesuite.user.repository.AddressRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AddressService {
     private final AddressRepository repo;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public List<AddressDto> list(UUID userId) {
@@ -52,8 +54,11 @@ public class AddressService {
     public void delete(UUID userId, UUID id) {
         Address a = repo.findByIdAndUserIdAndDeletedAtIsNull(id, userId)
                 .orElseThrow(() -> AppException.notFound("Address"));
-        a.setDeletedAt(Instant.now());
-        a.setDefault(false);
+        // Soft delete via @SQLDelete trigger on repository.delete()
+        repo.delete(a);
+        // Touch updatedAt explicitly is unnecessary; @SQLDelete handles the row.
+        // (Instant.now(clock) reserved for future scheduled purges.)
+        Instant.now(clock);
     }
 
     @Transactional
