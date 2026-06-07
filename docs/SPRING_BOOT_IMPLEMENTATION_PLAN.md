@@ -792,3 +792,9 @@ Implemented `com.commercesuite.cart.*`, `com.commercesuite.coupon.*`, and `com.c
 - No real EMAIL/SMS/PUSH providers
 - No webhooks
 - No analytics persistence
+
+## Phase 8.3 — Audit Expansion ✅
+
+Sprint delivered: registry-driven audit consumer, search/export/retention/coverage
+services, admin REST controller, V015 migration, 5 test classes, AUDIT_MODULE.md.
+Audit pipeline now fully decoupled from domain services via the outbox.

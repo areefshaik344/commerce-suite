@@ -47,3 +47,12 @@ Severity is `CRITICAL` for refresh-token reuse and security violations;
 
 Indefinite for now; rotation policy will be defined in Sprint 8.4 along
 with regulator-driven retention windows.
+---
+
+## Phase 8.3 update — superseded by Audit Module
+
+The hardcoded `AuditPublisher` switch documented above is **replaced** by
+the registry-driven `AuditConsumer`. Severity ladder gained `HIGH`, and
+audit records now carry an `AuditCategory`. See `docs/AUDIT_MODULE.md`
+for the full Phase 8.3 design (search, export, retention, coverage,
+admin APIs, V015 schema).
