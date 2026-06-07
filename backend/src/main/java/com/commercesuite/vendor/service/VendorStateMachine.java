@@ -21,7 +21,6 @@ public class VendorStateMachine {
 
     public void transition(Vendor vendor, VendorStatus next, UUID actorId, String reason) {
         VendorStatus prev = vendor.getStatus();
-        if (prev == next) return;
         if (!prev.canTransitionTo(next))
             throw AppException.conflict(ErrorCode.CONFLICT,
                     "Illegal vendor transition " + prev + " -> " + next);

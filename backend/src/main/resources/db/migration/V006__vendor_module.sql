@@ -191,7 +191,8 @@ CREATE TABLE vendor_status_history (
   to_status     vendor_status   NOT NULL,
   reason        TEXT,
   changed_by    UUID            REFERENCES users(id) ON DELETE SET NULL,
-  changed_at    TIMESTAMPTZ     NOT NULL DEFAULT now()
+  changed_at    TIMESTAMPTZ     NOT NULL DEFAULT now(),
+  version       BIGINT          NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_vendor_status_history_vendor ON vendor_status_history(vendor_id, changed_at DESC);
 
