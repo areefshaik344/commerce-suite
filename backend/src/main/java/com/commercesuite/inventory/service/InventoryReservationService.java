@@ -10,6 +10,10 @@ import com.commercesuite.inventory.event.InventoryEvents.*;
 import com.commercesuite.inventory.repository.InventoryItemRepository;
 import com.commercesuite.inventory.repository.InventoryReservationRepository;
 import com.commercesuite.inventory.service.InventoryOwnershipGuard.OwnedVariant;
+import com.commercesuite.catalog.entity.Product;
+import com.commercesuite.catalog.entity.ProductVariant;
+import com.commercesuite.catalog.repository.ProductRepository;
+import com.commercesuite.catalog.repository.ProductVariantRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -44,6 +48,8 @@ public class InventoryReservationService {
     private final InventoryLowStockService lowStockService;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final ProductRepository productRepo;
+    private final ProductVariantRepository variantRepo;
 
     @Value("${app.inventory.reservation-ttl-seconds:900}")
     private long defaultTtlSeconds;
@@ -171,6 +177,79 @@ public class InventoryReservationService {
 
         events.publishEvent(new InventoryExpiredEvent(r.getId(), r.getVariantId(), r.getVendorId(),
                 r.getQty(), now));
+    }
+
+    /**
+     * Customer-driven reservation (used by Checkout). Does NOT enforce vendor
+     * ownership of the variant — the customer is the actor. The variant must
+     * still exist and belong to a real vendor.
+     */
+    @Transactional
+    public ReservationDto reserveForCustomer(UUID variantId, ReserveInventoryRequest req, ActorContext actor) {
+        ProductVariant v = variantRepo.findById(variantId)
+                .orElseThrow(() -> AppException.notFound("Variant"));
+        Product p = productRepo.findById(v.getProductId())
+                .orElseThrow(() -> AppException.notFound("Product"));
+        UUID vendorId = p.getVendorId();
+
+        allocator.acquireVariantLock(variantId);
+        InventoryItem item = itemRepo.findForUpdateByVariantId(variantId)
+                .orElseThrow(() -> AppException.conflict(ErrorCode.CONFLICT,
+                        "Inventory not initialised for variant"));
+
+        int available = item.getOnHandQty() - item.getReservedQty();
+        if (req.qty() > available)
+            throw AppException.conflict(ErrorCode.CONFLICT,
+                    "Insufficient stock: requested=" + req.qty() + " available=" + available);
+
+        Instant now = Instant.now(clock);
+        long ttl = req.ttlSeconds() != null && req.ttlSeconds() > 0 ? req.ttlSeconds() : defaultTtlSeconds;
+        Instant expires = now.plus(Duration.ofSeconds(ttl));
+
+        int before = item.getReservedQty();
+        item.setReservedQty(before + req.qty());
+        int after = item.getReservedQty();
+
+        InventoryReservation r = reservationRepo.save(InventoryReservation.builder()
+                .variantId(variantId).vendorId(vendorId)
+                .ownerUserId(actor.userId()).cartId(req.cartId())
+                .qty(req.qty()).unitPricePaise(req.unitPricePaise())
+                .status(ReservationStatus.RESERVED)
+                .reservedAt(now).expiresAt(expires)
+                .build());
+
+        movements.record(variantId, vendorId, InventoryMovementType.RESERVATION,
+                req.qty(), before, after, r.getId(), "CHECKOUT", r.getId(),
+                "reserve-for-customer", actor.userId());
+
+        events.publishEvent(new InventoryReservedEvent(r.getId(), variantId, vendorId,
+                actor.userId(), req.qty(), expires, now));
+        lowStockService.checkAndEmit(item);
+        return ReservationDto.from(r);
+    }
+
+    /** System-driven release (sweeper / event bus). Bypasses ownership checks. */
+    @Transactional
+    public void releaseBySystem(UUID reservationId, ReservationReleaseReason reason) {
+        InventoryReservation r = reservationRepo.findById(reservationId).orElse(null);
+        if (r == null || r.getStatus() != ReservationStatus.RESERVED) return;
+        allocator.acquireVariantLock(r.getVariantId());
+        InventoryItem item = itemRepo.findForUpdateByVariantId(r.getVariantId()).orElse(null);
+        if (item == null) return;
+        int beforeRes = item.getReservedQty();
+        item.setReservedQty(Math.max(0, beforeRes - r.getQty()));
+
+        Instant now = Instant.now(clock);
+        fsm.transition(r, ReservationStatus.RELEASED, null, "system:" + reason.name());
+        r.setReleasedAt(now);
+        r.setReleaseReason(reason);
+
+        movements.record(r.getVariantId(), r.getVendorId(), InventoryMovementType.RELEASE,
+                -r.getQty(), beforeRes, item.getReservedQty(),
+                r.getId(), "RESERVATION", r.getId(), reason.name(), null);
+
+        events.publishEvent(new InventoryReleasedEvent(r.getId(), r.getVariantId(), r.getVendorId(),
+                r.getQty(), reason, now));
     }
 
     @Transactional(readOnly = true)
