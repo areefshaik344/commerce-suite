@@ -1,0 +1,24 @@
+version: "3.9"
+# Prod compose is a reference only. Real deployments use k8s.
+services:
+  app:
+    image: ${IMAGE_REPO}:${IMAGE_TAG}
+    restart: always
+    environment:
+      SPRING_PROFILES_ACTIVE: production
+      DB_URL: ${DB_URL}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      SECRET_PROVIDER: ${SECRET_PROVIDER:-env}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+    ports: ["8080:8080"]
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 2G }
+    healthcheck:
+      test: ["CMD","curl","-fsS","http://localhost:8080/actuator/health/readiness"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

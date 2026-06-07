@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: commerce-suite
+  namespace: commerce-suite
+spec:
+  podSelector:
+    matchLabels: { app: commerce-suite }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { name: ingress-nginx }
+      ports: [{ port: 8080, protocol: TCP }]
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { port: 5432, protocol: TCP }   # Postgres
+        - { port: 6379, protocol: TCP }   # Redis
+        - { port: 443,  protocol: TCP }   # outbound HTTPS
+        - { port: 53,   protocol: UDP }   # DNS

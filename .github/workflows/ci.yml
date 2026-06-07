@@ -1,0 +1,65 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cs
+          POSTGRES_PASSWORD: cs
+          POSTGRES_DB: commerce_suite
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cs"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      DB_URL: jdbc:postgresql://localhost:5432/commerce_suite
+      DB_USER: cs
+      DB_PASSWORD: cs
+      JWT_SECRET: ci-secret-min-32-bytes-padding-padding!!
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21', cache: gradle }
+      - name: Build & unit tests
+        working-directory: backend
+        run: ./gradlew --no-daemon clean test
+      - name: Migration validation (Flyway info)
+        working-directory: backend
+        run: ./gradlew --no-daemon flywayInfo || true
+      - name: Dependency scan (OWASP)
+        working-directory: backend
+        run: ./gradlew --no-daemon dependencyCheckAnalyze || true
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-reports
+          path: backend/build/reports
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx vitest run
+      - run: bun run build
+      - name: npm audit (high)
+        run: bun pm audit --severity high || true
+  docker:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deployment/docker/Dockerfile
+          push: false
+          tags: commerce-suite:ci
