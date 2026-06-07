@@ -17,51 +17,46 @@ public class OrderRollupService {
     private final VendorOrderRepository vendorOrderRepo;
     private final OrderStateMachine fsm;
 
+    /**
+     * HIGH H-02 resolution. Implements ORDER_FSM.md §3 rollup table verbatim,
+     * using non-cancelled children as the denominator for "all" predicates.
+     */
     @Transactional
     public void rollup(Order order) {
         List<VendorOrder> children = vendorOrderRepo.findByOrderId(order.getId());
         if (children.isEmpty()) return;
 
-        boolean allCancelled  = children.stream().allMatch(c -> c.getStatus() == VendorOrderStatus.CANCELLED);
-        boolean anyCancelled  = children.stream().anyMatch(c -> c.getStatus() == VendorOrderStatus.CANCELLED);
-        boolean allDelivered  = children.stream().allMatch(c -> isDeliveredOrTerminal(c.getStatus()));
-        boolean anyDelivered  = children.stream().anyMatch(c -> c.getStatus() == VendorOrderStatus.DELIVERED
-                                                              || c.getStatus() == VendorOrderStatus.RETURNED
-                                                              || c.getStatus() == VendorOrderStatus.REFUNDED
-                                                              || c.getStatus() == VendorOrderStatus.CLOSED);
-        boolean anyShipped    = children.stream().anyMatch(c -> c.getStatus() == VendorOrderStatus.SHIPPED
-                                                              || c.getStatus() == VendorOrderStatus.OUT_FOR_DELIVERY);
-        boolean allShipped    = children.stream().allMatch(c -> isShippedOrLater(c.getStatus()) || c.getStatus() == VendorOrderStatus.CANCELLED);
-        boolean allReturned   = children.stream().allMatch(c -> c.getStatus() == VendorOrderStatus.RETURNED
-                                                              || c.getStatus() == VendorOrderStatus.REFUNDED
-                                                              || c.getStatus() == VendorOrderStatus.CANCELLED);
-        boolean anyReturned   = children.stream().anyMatch(c -> c.getStatus() == VendorOrderStatus.RETURNED
-                                                              || c.getStatus() == VendorOrderStatus.REFUNDED);
-        boolean allConfirmed  = children.stream().allMatch(c -> c.getStatus() != VendorOrderStatus.CREATED);
+        int total       = children.size();
+        int cancelled   = (int) children.stream().filter(c -> c.getStatus() == VendorOrderStatus.CANCELLED).count();
+        int delivered   = (int) children.stream().filter(c -> c.getStatus() == VendorOrderStatus.DELIVERED).count();
+        int shipped     = (int) children.stream().filter(c -> c.getStatus() == VendorOrderStatus.SHIPPED
+                                                            || c.getStatus() == VendorOrderStatus.OUT_FOR_DELIVERY).count();
+        int returned    = (int) children.stream().filter(c -> c.getStatus() == VendorOrderStatus.RETURNED).count();
+        int refunded    = (int) children.stream().filter(c -> c.getStatus() == VendorOrderStatus.REFUNDED
+                                                            || c.getStatus() == VendorOrderStatus.COMPLETED
+                                                            || c.getStatus() == VendorOrderStatus.CLOSED).count();
+        int nonCancelled = total - cancelled;
 
         OrderStatus target;
-        if (allCancelled)                     target = OrderStatus.CANCELLED;
-        else if (allReturned && anyReturned)  target = OrderStatus.RETURNED;
-        else if (anyReturned)                 target = OrderStatus.PARTIALLY_RETURNED;
-        else if (allDelivered && anyDelivered) target = OrderStatus.DELIVERED;
-        else if (anyDelivered)                target = OrderStatus.PARTIALLY_SHIPPED;
-        else if (allShipped && anyShipped)    target = OrderStatus.SHIPPED;
-        else if (anyShipped)                  target = OrderStatus.PARTIALLY_SHIPPED;
-        else if (anyCancelled)                target = OrderStatus.PARTIALLY_CANCELLED;
-        else if (allConfirmed)                target = OrderStatus.CONFIRMED;
-        else                                  target = order.getStatus();
+        if (cancelled == total) {
+            target = OrderStatus.CANCELLED;
+        } else if (nonCancelled > 0 && (delivered + returned + refunded) == nonCancelled) {
+            if (returned + refunded == nonCancelled)       target = OrderStatus.RETURNED;
+            else if (returned + refunded > 0)              target = OrderStatus.PARTIALLY_RETURNED;
+            else                                            target = OrderStatus.DELIVERED;
+        } else if (delivered > 0) {
+            target = OrderStatus.PARTIALLY_DELIVERED;
+        } else if (shipped == nonCancelled && nonCancelled > 0) {
+            target = OrderStatus.SHIPPED;
+        } else if (shipped > 0) {
+            target = OrderStatus.PARTIALLY_SHIPPED;
+        } else if (cancelled > 0) {
+            target = OrderStatus.PARTIALLY_CANCELLED;
+        } else {
+            target = order.getStatus();
+        }
 
         if (target != order.getStatus() && order.getStatus().canTransitionTo(target))
             fsm.transition(order, target, null, "system", "rollup");
-    }
-
-    private boolean isDeliveredOrTerminal(VendorOrderStatus s) {
-        return s == VendorOrderStatus.DELIVERED || s == VendorOrderStatus.CANCELLED
-            || s == VendorOrderStatus.RETURNED || s == VendorOrderStatus.REFUNDED || s == VendorOrderStatus.CLOSED;
-    }
-    private boolean isShippedOrLater(VendorOrderStatus s) {
-        return s == VendorOrderStatus.SHIPPED || s == VendorOrderStatus.OUT_FOR_DELIVERY
-            || s == VendorOrderStatus.DELIVERED || s == VendorOrderStatus.RETURNED
-            || s == VendorOrderStatus.REFUNDED || s == VendorOrderStatus.CLOSED;
     }
 }
