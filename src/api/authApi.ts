@@ -58,7 +58,7 @@ export interface SignupRequest { name: string; email: string; phone: string; pas
 export interface AuthTokens { accessToken: string; refreshToken: string; }
 export interface AuthResponse extends AuthTokens { user: User; }
 
-export const authApi = {
+const mockAuthApi = {
   async login(req: LoginRequest): Promise<ApiResponse<AuthResponse>> {
     await simulateDelay(450);
     const cred = mockCredentials.find((c) => c.email.toLowerCase() === req.email.toLowerCase());
@@ -197,5 +197,122 @@ export const authApi = {
     return ok(mockUsers[idx], "Profile updated");
   },
 };
+
+/* ------------------------------------------------------------------ *
+ *  REAL backend authentication adapter (Spring Boot, Phase FE-2).
+ *  Maps the backend ProfileDto -> frontend `User` shape so existing
+ *  store/UI code keeps working without touching call-sites.
+ * ------------------------------------------------------------------ */
+
+interface BackendTokens { accessToken: string; refreshToken: string; tokenType: string; expiresIn: number; }
+interface BackendProfile {
+  id: string; email: string; phone: string | null;
+  emailVerified: boolean; phoneVerified: boolean;
+  accountStatus: string; roles: string[];
+  fullName: string | null; displayName: string | null; avatarUrl: string | null;
+}
+
+function profileToUser(p: BackendProfile): User {
+  const roles = (p.roles ?? []).map((r) => r.toUpperCase());
+  const role: User["role"] = roles.includes("ADMIN") ? "admin" : roles.includes("VENDOR") ? "vendor" : "customer";
+  return {
+    id: p.id,
+    name: p.fullName || p.displayName || p.email,
+    email: p.email,
+    avatar: p.avatarUrl || "",
+    role,
+    phone: p.phone || "",
+    joinedDate: new Date().toISOString().split("T")[0],
+    isVendor: role === "vendor",
+    vendorStatus: role === "vendor" ? "active" : "none",
+    accountStatus: (p.accountStatus as User["accountStatus"]) ?? "ACTIVE",
+    emailVerified: p.emailVerified,
+    phoneVerified: p.phoneVerified,
+  } as User;
+}
+
+const realAuthApi = {
+  async login(req: LoginRequest): Promise<ApiResponse<AuthResponse>> {
+    const t = await httpClient.post<BackendTokens>("/auth/login", req, { skipAuth: true });
+    // Stash access token so the follow-up /me call is authenticated.
+    const { tokenStorage } = await import("@/lib/tokenStorage");
+    tokenStorage.setAccess(t.data.accessToken);
+    const me = await httpClient.get<BackendProfile>("/me");
+    return ok({ user: profileToUser(me.data), accessToken: t.data.accessToken, refreshToken: t.data.refreshToken }, "Login successful");
+  },
+
+  async signup(req: SignupRequest): Promise<ApiResponse<AuthResponse>> {
+    const payload = { email: req.email, password: req.password, fullName: req.name, phone: req.phone, requestedRole: "CUSTOMER" };
+    const t = await httpClient.post<BackendTokens>("/auth/signup", payload, { skipAuth: true });
+    const { tokenStorage } = await import("@/lib/tokenStorage");
+    tokenStorage.setAccess(t.data.accessToken);
+    const me = await httpClient.get<BackendProfile>("/me");
+    return ok({ user: profileToUser(me.data), accessToken: t.data.accessToken, refreshToken: t.data.refreshToken }, "Account created");
+  },
+
+  async logout(refreshToken: string | null): Promise<ApiResponse<{ revoked: boolean }>> {
+    if (!refreshToken) return ok({ revoked: false }, "Logged out");
+    try { await httpClient.post<void>("/auth/logout", { refreshToken }); } catch { /* idempotent */ }
+    return ok({ revoked: true }, "Logged out");
+  },
+
+  async refresh(refreshToken: string | null): Promise<ApiResponse<AuthTokens>> {
+    if (!refreshToken) throw new ApiError("Missing refresh token", 401);
+    const t = await httpClient.post<BackendTokens>("/auth/refresh", { refreshToken }, { skipAuth: true });
+    return ok({ accessToken: t.data.accessToken, refreshToken: t.data.refreshToken }, "Token refreshed");
+  },
+
+  async me(accessToken: string | null): Promise<ApiResponse<User>> {
+    if (!accessToken) throw new ApiError("Not authenticated", 401);
+    const me = await httpClient.get<BackendProfile>("/me");
+    return ok(profileToUser(me.data), "OK");
+  },
+
+  // The backend does not expose an OTP send/verify endpoint; email verification is
+  // a single-token flow (POST /auth/email/verify). Treat sendOtp as a no-op success
+  // in real mode, and route verifyOtp through the email-verify endpoint when the
+  // purpose is verify-email. Reset flows use /auth/password/forgot + /auth/password/reset.
+  async sendOtp(target: string, purpose: OtpRecord["purpose"]): Promise<ApiResponse<{ sent: boolean; devCode?: string }>> {
+    if (purpose === "reset-password") {
+      await httpClient.post<void>("/auth/password/forgot", { email: target }, { skipAuth: true });
+    }
+    return ok({ sent: true }, "If an account exists, a code/link was sent");
+  },
+
+  async verifyOtp(target: string, purpose: OtpRecord["purpose"], code: string): Promise<ApiResponse<{ verified: true }>> {
+    if (purpose === "verify-email") {
+      await httpClient.post<void>("/auth/email/verify", { token: code }, { skipAuth: true });
+      return ok({ verified: true as const }, "Verified");
+    }
+    // reset-password verification is performed atomically by /auth/password/reset.
+    return ok({ verified: true as const }, "Verified");
+  },
+
+  async forgotPassword(email: string): Promise<ApiResponse<{ message: string; devCode?: string }>> {
+    await httpClient.post<void>("/auth/password/forgot", { email }, { skipAuth: true });
+    return ok({ message: "If this email exists, a reset link has been sent." });
+  },
+
+  async resetPassword(_email: string, token: string, newPassword: string): Promise<ApiResponse<{ reset: true }>> {
+    await httpClient.post<void>("/auth/password/reset", { token, newPassword }, { skipAuth: true });
+    return ok({ reset: true as const }, "Password reset successful");
+  },
+
+  async updateProfile(_userId: string, data: Partial<User>): Promise<ApiResponse<User>> {
+    const me = await httpClient.patch<BackendProfile>("/me", {
+      fullName: data.name,
+      phone: data.phone,
+      avatarUrl: data.avatar,
+    });
+    return ok(profileToUser(me.data), "Profile updated");
+  },
+};
+
+/**
+ * Feature-flagged transport. Toggle with `VITE_USE_MOCK_API`:
+ *   - `1` (or unset in `.env.development`) → mock backend
+ *   - `0` (default in `.env.production`)    → real Spring Boot backend
+ */
+export const authApi = USE_REAL_API ? realAuthApi : mockAuthApi;
 
 export type { OtpRecord };
