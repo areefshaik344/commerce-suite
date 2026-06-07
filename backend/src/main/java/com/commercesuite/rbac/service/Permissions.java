@@ -12,6 +12,8 @@ public final class Permissions {
 
     public static final String MANAGE_PRODUCTS         = "MANAGE_PRODUCTS";
     public static final String MANAGE_INVENTORY        = "MANAGE_INVENTORY";
+    public static final String MANAGE_VENDOR_PROFILE   = "MANAGE_VENDOR_PROFILE";
+    public static final String VIEW_VENDOR_PAYOUTS     = "VIEW_VENDOR_PAYOUTS";
     public static final String MANAGE_VENDOR_ORDERS    = "MANAGE_VENDOR_ORDERS";
     public static final String MANAGE_VENDOR_RETURNS   = "MANAGE_VENDOR_RETURNS";
     public static final String MANAGE_VENDOR_COUPONS   = "MANAGE_VENDOR_COUPONS";
