@@ -50,7 +50,7 @@ public class OrderSnapshotService {
                "\"line2\":" + json(a.getLine2()) + "," +
                "\"city\":" + json(a.getCity()) + "," +
                "\"state\":" + json(a.getState()) + "," +
-               "\"postalCode\":" + json(a.getPostalCode()) + "," +
+               "\"pincode\":" + json(a.getPincode()) + "," +
                "\"country\":" + json(a.getCountry()) + "}";
     }
 
