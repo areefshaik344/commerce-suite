@@ -721,3 +721,37 @@ Implemented `com.commercesuite.cart.*`, `com.commercesuite.coupon.*`, and `com.c
 - 4 event groups (`OrderEvents`, `ShippingEvents`, `ReturnEvents`, `RefundEvents`).
 - Minimal Phase-4 extension: added `InventoryReservationService.commitBySystem` to satisfy `RESERVED → COMMITTED` for order creation.
 - Permissions reused (`PLACE_ORDER`, `MANAGE_VENDOR_ORDERS`, `MANAGE_VENDOR_RETURNS`, `MANAGE_PAYOUTS`).
+
+---
+
+## Phase 8.1 — Outbox, Auth Events, Audit, Notification Preferences
+
+### Migration
+`V013__platform_foundation.sql`:
+- enums: `outbox_status`, `audit_severity`, `notification_channel`, `notification_category`
+- tables: `outbox_events`, `outbox_event_attempts`, `audit_log`, `notification_preferences`
+- triggers: `fn_touch_updated_at` reused for outbox + preferences
+- grants: service_role full, authenticated scoped; outbox effectively service-only (no SELECT policy for users)
+- RLS: `audit_self_read`, `notifpref_owner_all`
+- append-only: REVOKE UPDATE/DELETE on `audit_log`; REVOKE DELETE on `outbox_event_attempts`
+
+### Java packages
+- `com.commercesuite.common.outbox` — `OutboxEvent`, `OutboxStatus`, `OutboxEventAttempt`, `OutboxService`, `OutboxPublisher`, `OutboxDispatcher`, `OutboxRetryPolicy`, `OutboxMetrics`, `OutboxDispatchEvent`, repositories.
+- `com.commercesuite.auth.event.AuthEvents` — 8 events + payload records.
+- `com.commercesuite.common.audit.log` — `AuditLog`, `AuditAction`, `AuditSeverity`, `AuditActorType`, `AuditContext`, `AuditService`, `AuditPublisher`, `AuditLogRepository`.
+- `com.commercesuite.notifications.preferences` — entity, repo, service, controller, DTOs.
+
+### Wiring
+- `AuthService` and `RefreshTokenService` now publish through `OutboxPublisher` (no behavioural change to flows).
+- `RefreshTokenService.revoke(...)` returns `Optional<UUID>` so logout can publish `USER_LOGGED_OUT`.
+- `OutboxDispatcher` runs every `outbox.dispatcher.delay-ms` (default 1s) using `@Scheduled`; `@EnableScheduling` already on `CommerceSuiteApplication`.
+- `AuditPublisher` listens to `OutboxDispatchEvent` and writes an `audit_log` row for the auditable event set.
+
+### Tests
+- `OutboxRetryPolicyTest` (unit), `OutboxPersistenceIT`, `OutboxDispatcherIT`, `AuditLogIT`, `NotificationPreferenceIT`, `AuthEventPublicationIT`.
+
+### Phase boundaries
+- No notification delivery / templates yet.
+- No analytics persistence yet.
+- No webhook subscriptions / signing yet.
+- Existing modules continue to use `AfterCommitEventPublisher` — incremental migration to `OutboxPublisher` will land alongside the webhook subscriber (Sprint 8.5).

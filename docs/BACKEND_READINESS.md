@@ -154,3 +154,22 @@ Out of Phase 2 scope (still pending): file storage for documents, penny-drop ban
 - Immutable snapshots (address, vendor, product, pricing) stored as JSONB on creation.
 - 5 FSMs (Order, VendorOrder, Shipment, Return, Refund) with server-enforced transitions.
 - See `docs/ORDERS_SHIPPING_MODULE.md`.
+
+---
+
+## Phase 8.1 — Platform Foundation (Outbox + Auth Events + Audit + Notification Preferences)
+
+**Status:** delivered. Resolves BLOCKER R-01 + HIGH risks R-02, R-03, R-04 from `PLATFORM_INTEGRATION_AUDIT.md`.
+
+Modules:
+- `common/outbox` — durable transactional outbox with scheduled dispatcher, exponential-backoff retry, dead-letter handling, SKIP-LOCKED batch claiming, and per-attempt diagnostic trail.
+- `auth/event/AuthEvents` — 8 canonical Auth events published via `OutboxPublisher` (registered, logged-in, logged-out, password-changed/reset-requested/reset-completed, email-verified, refresh-token reuse detected).
+- `common/audit/log` — append-only `audit_log` (REVOKE UPDATE/DELETE), `AuditService`, `AuditPublisher` subscribes to dispatched outbox events.
+- `notifications/preferences` — per-user `(channel, category)` matrix, owner-scoped RLS, REST endpoints under `/api/v1/me/notification-preferences`.
+
+Migration: `V013__platform_foundation.sql` (4 tables, 4 enums, 9 indexes, RLS + grants + append-only enforcement).
+Tests: `OutboxPersistenceIT`, `OutboxDispatcherIT`, `OutboxRetryPolicyTest`, `AuditLogIT`, `NotificationPreferenceIT`, `AuthEventPublicationIT`.
+
+Docs: `docs/OUTBOX_ARCHITECTURE.md`, `docs/AUDIT_FOUNDATION.md`, `docs/NOTIFICATION_FOUNDATION.md`.
+
+Phase 8.1 does NOT implement notification delivery, analytics persistence, or webhook delivery — those are sprints 8.2 / 8.4 / 8.5 per `PHASE8_IMPLEMENTATION_BLUEPRINT.md`.
