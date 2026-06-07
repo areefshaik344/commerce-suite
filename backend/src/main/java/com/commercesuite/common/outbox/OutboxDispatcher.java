@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -27,7 +28,8 @@ public class OutboxDispatcher {
     private final ApplicationEventPublisher localBus;
     private final Clock clock;
 
-    private static final int BATCH_SIZE = 50;
+    @Value("${outbox.dispatcher.batch-size:100}")
+    private int batchSize;
 
     @Scheduled(fixedDelayString = "${outbox.dispatcher.delay-ms:1000}")
     public void tick() {
@@ -37,7 +39,7 @@ public class OutboxDispatcher {
 
     @Transactional
     public int dispatchBatch() {
-        List<OutboxEvent> batch = outboxRepo.claimBatch(Instant.now(clock), BATCH_SIZE);
+        List<OutboxEvent> batch = outboxRepo.claimBatch(Instant.now(clock), batchSize);
         if (batch.isEmpty()) return 0;
         for (OutboxEvent ev : batch) {
             ev.setStatus(OutboxStatus.PROCESSING);
