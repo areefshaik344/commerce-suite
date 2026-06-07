@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: commerce-suite
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/commerce_suite}
+    username: ${DB_USER:cs}
+    password: ${DB_PASSWORD:cs}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+      hibernate.format_sql: false
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-me-please-this-is-only-for-local-development-and-must-be-at-least-64-bytes-long-xx}
+    issuer: commerce-suite
+    access-ttl-minutes: ${JWT_ACCESS_TTL_MIN:15}
+    refresh-ttl-days: ${JWT_REFRESH_TTL_DAYS:30}
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    root: INFO
+    com.commercesuite: DEBUG
+    org.springframework.security: INFO
