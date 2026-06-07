@@ -46,7 +46,3 @@ CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_claim
   WHERE status IN ('QUEUED','FAILED');
 CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_endpoint_status
   ON public.webhook_deliveries (endpoint_id, status);
-
--- ---------- analytics_events: rollup scan coverage ----------
-CREATE INDEX IF NOT EXISTS idx_analytics_events_category_occurred
-  ON public.analytics_events (category, occurred_at);
