@@ -19,14 +19,12 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class NotificationDeliveryService {
 
     private final NotificationRepository notifRepo;
@@ -35,7 +33,6 @@ public class NotificationDeliveryService {
     private final NotificationStateMachine fsm;
     private final OutboxPublisher outbox;
     private final Clock clock;
-
     private final Map<NotificationChannel, NotificationDeliveryStrategy> strategies = new EnumMap<>(NotificationChannel.class);
 
     public NotificationDeliveryService(
@@ -46,7 +43,12 @@ public class NotificationDeliveryService {
             OutboxPublisher outbox,
             Clock clock,
             List<NotificationDeliveryStrategy> available) {
-        this(notifRepo, deliveryRepo, historyRepo, fsm, outbox, clock);
+        this.notifRepo = notifRepo;
+        this.deliveryRepo = deliveryRepo;
+        this.historyRepo = historyRepo;
+        this.fsm = fsm;
+        this.outbox = outbox;
+        this.clock = clock;
         for (NotificationDeliveryStrategy s : available) strategies.put(s.channel(), s);
     }
 
