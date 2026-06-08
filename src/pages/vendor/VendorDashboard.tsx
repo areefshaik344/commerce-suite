@@ -2,30 +2,54 @@ import { StatCard } from "@/components/shared/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { analyticsData, orders } from "@/data/mock-orders";
 import { DollarSign, Package, ShoppingCart, TrendingUp, Rocket, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useVendorOnboardingStore } from "@/store/vendorOnboardingStore";
 import { Progress } from "@/components/ui/progress";
-
-const COLORS = ["hsl(142 71% 45%)", "hsl(221 83% 53%)", "hsl(38 92% 50%)", "hsl(280 67% 54%)", "hsl(0 72% 51%)", "hsl(220 10% 46%)"];
+import { useQuery } from "@tanstack/react-query";
+import { vendorAnalyticsApi } from "@/api/vendorAnalyticsApi";
+import { vendorOrderApi } from "@/api/vendorOrderApi";
+import { Skeleton } from "@/components/ui/skeleton";
+import { paiseToRupees } from "@/lib/money";
 
 const statusColors: Record<string, string> = {
-  delivered: "bg-success/10 text-success",
-  cancelled: "bg-destructive/10 text-destructive",
-  shipped: "bg-accent/10 text-accent-foreground",
-  pending: "bg-warning/10 text-warning",
-  confirmed: "bg-primary/10 text-primary",
+  DELIVERED: "bg-success/10 text-success",
+  CANCELLED: "bg-destructive/10 text-destructive",
+  SHIPPED: "bg-accent/10 text-accent-foreground",
+  CREATED: "bg-warning/10 text-warning",
+  PENDING_PAYMENT: "bg-warning/10 text-warning",
+  CONFIRMED: "bg-primary/10 text-primary",
+  PROCESSING: "bg-primary/10 text-primary",
 };
+
+function metric(snapshot: { metric: string; value: number }[] | undefined, name: string): number {
+  return snapshot?.find(m => m.metric === name)?.value ?? 0;
+}
 
 export default function VendorDashboard() {
   const navigate = useNavigate();
   const onboarding = useVendorOnboardingStore();
   const completion = onboarding.completionPercent();
   const showBanner = onboarding.finalStatus !== "approved";
-  const revenueData = analyticsData.monthlyRevenue.map(d => ({ ...d, revenue: d.revenue / 100000 }));
-  const statusData = analyticsData.ordersByStatus;
+
+  const overviewQ = useQuery({
+    queryKey: ["vendor", "analytics", "overview"],
+    queryFn: () => vendorAnalyticsApi.overview().then(r => r.data),
+  });
+  const revenueQ = useQuery({
+    queryKey: ["vendor", "analytics", "revenue", "MONTH"],
+    queryFn: () => vendorAnalyticsApi.revenue("MONTH").then(r => r.data),
+  });
+  const ordersQ = useQuery({
+    queryKey: ["vendor", "orders", "recent"],
+    queryFn: () => vendorOrderApi.list(0, 5).then(r => r.data),
+  });
+
+  const revenueData = (revenueQ.data?.points ?? []).map(p => ({
+    month: new Date(p.bucketStart).toLocaleDateString("en-IN", { month: "short" }),
+    revenue: paiseToRupees(p.valueSum) / 100000,
+  }));
 
   return (
     <div className="space-y-6">
@@ -59,39 +83,29 @@ export default function VendorDashboard() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Revenue" value="₹89.5L" change="+12.5% from last month" changeType="positive" icon={DollarSign} iconClassName="bg-success/10 text-success" />
-        <StatCard title="Total Orders" value="12,500" change="+8.2% from last month" changeType="positive" icon={ShoppingCart} iconClassName="bg-primary/10 text-primary" />
-        <StatCard title="Products" value="45" change="3 new this month" changeType="neutral" icon={Package} iconClassName="bg-secondary/10 text-secondary" />
-        <StatCard title="Conversion Rate" value="3.2%" change="+0.5% from last month" changeType="positive" icon={TrendingUp} iconClassName="bg-accent/10 text-accent" />
+        <StatCard title="Total Revenue" value={overviewQ.isLoading ? "—" : `₹${(paiseToRupees(metric(overviewQ.data?.metrics, "order.gmv")) / 100000).toFixed(1)}L`} icon={DollarSign} iconClassName="bg-success/10 text-success" />
+        <StatCard title="Total Orders" value={overviewQ.isLoading ? "—" : metric(overviewQ.data?.metrics, "order.created").toLocaleString("en-IN")} icon={ShoppingCart} iconClassName="bg-primary/10 text-primary" />
+        <StatCard title="AOV" value={overviewQ.isLoading ? "—" : overviewQ.data?.aov ? `₹${paiseToRupees(overviewQ.data.aov).toLocaleString("en-IN")}` : "—"} icon={Package} iconClassName="bg-secondary/10 text-secondary" />
+        <StatCard title="Conversion" value={overviewQ.isLoading ? "—" : overviewQ.data?.checkoutConversion != null ? `${(overviewQ.data.checkoutConversion * 100).toFixed(1)}%` : "—"} icon={TrendingUp} iconClassName="bg-accent/10 text-accent" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <Card className="shadow-card">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Revenue Trend (₹ Lakhs)</CardTitle></CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={revenueData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="month" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-card">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-display">Orders by Status</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="count" nameKey="status" label={({ status, percent }) => `${status} ${(percent * 100).toFixed(0)}%`}>
-                  {statusData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-              </PieChart>
-            </ResponsiveContainer>
+            {revenueQ.isLoading ? <Skeleton className="h-[280px] w-full" /> : revenueData.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-12 text-center">No revenue data yet</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={revenueData}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="month" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
+                  <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -104,32 +118,40 @@ export default function VendorDashboard() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground">
-                  <th className="text-left py-2 font-medium">Order ID</th>
-                  <th className="text-left py-2 font-medium">Product</th>
-                  <th className="text-left py-2 font-medium">Status</th>
-                  <th className="text-right py-2 font-medium">Amount</th>
-                  <th className="text-right py-2 font-medium">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.slice(0, 5).map(order => (
-                  <tr key={order.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => navigate(`/vendor/orders/${order.id}`)}>
-                    <td className="py-2.5 font-mono font-medium">{order.id}</td>
-                    <td className="py-2.5 text-muted-foreground">{order.items[0]?.productName}</td>
-                    <td className="py-2.5">
-                      <Badge variant="secondary" className={`text-xs capitalize border-0 ${statusColors[order.status] || ""}`}>{order.status}</Badge>
-                    </td>
-                    <td className="py-2.5 text-right font-medium">₹{order.total.toLocaleString("en-IN")}</td>
-                    <td className="py-2.5 text-right text-muted-foreground">{new Date(order.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</td>
+          {ordersQ.isLoading ? (
+            <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : ordersQ.isError ? (
+            <p className="text-sm text-destructive py-6 text-center">Failed to load recent orders.</p>
+          ) : (ordersQ.data?.items.length ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No orders yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground">
+                    <th className="text-left py-2 font-medium">Order ID</th>
+                    <th className="text-left py-2 font-medium">Items</th>
+                    <th className="text-left py-2 font-medium">Status</th>
+                    <th className="text-right py-2 font-medium">Amount</th>
+                    <th className="text-right py-2 font-medium">Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {ordersQ.data!.items.map(order => (
+                    <tr key={order.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => navigate(`/vendor/orders/${order.id}`)}>
+                      <td className="py-2.5 font-mono font-medium">{order.id.slice(0, 8)}</td>
+                      <td className="py-2.5 text-muted-foreground">{order.items.length} item(s)</td>
+                      <td className="py-2.5">
+                        <Badge variant="secondary" className={`text-xs border-0 ${statusColors[order.status] || ""}`}>{order.status}</Badge>
+                      </td>
+                      <td className="py-2.5 text-right font-medium">₹{paiseToRupees(order.totalPaise).toLocaleString("en-IN")}</td>
+                      <td className="py-2.5 text-right text-muted-foreground">{new Date(order.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
