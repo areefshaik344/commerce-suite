@@ -10,8 +10,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Upload, X, Plus, Trash2, GripVertical, ImagePlus } from "lucide-react";
-import { categories } from "@/data/mock-products";
 import { toast } from "@/hooks/use-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { categoryApi } from "@/api/categoryApi";
+import { vendorProductApi } from "@/api/vendorProductApi";
+import { rupeesToPaise } from "@/lib/money";
 
 interface Variant {
   name: string;
@@ -25,6 +28,14 @@ interface SpecRow {
 
 export default function VendorProductForm() {
   const navigate = useNavigate();
+  const categoriesQ = useQuery({
+    queryKey: ["catalog", "categories", "tree"],
+    queryFn: () => categoryApi.getCategoryTree().then(r => r.data),
+  });
+  const categories = (categoriesQ.data ?? []).map(c => ({
+    id: c.id, name: c.name, slug: c.slug, icon: c.icon ?? "",
+    subcategories: (c.children ?? []).map(ch => ch.name),
+  }));
 
   // Basic info
   const [name, setName] = useState("");
@@ -126,13 +137,28 @@ export default function VendorProductForm() {
     ? Math.round(((parseFloat(originalPrice) - parseFloat(price)) / parseFloat(originalPrice)) * 100)
     : 0;
 
+  const createM = useMutation({
+    mutationFn: () => vendorProductApi.create({
+      title: name,
+      description,
+      categoryId: selectedCategory?.id ?? "",
+      basePricePaise: rupeesToPaise(originalPrice || price),
+      salePricePaise: originalPrice ? rupeesToPaise(price) : undefined,
+      primaryImageUrl: images[0],
+    }),
+    onSuccess: () => {
+      toast({ title: "Product created!", description: `"${name}" has been added to your store.` });
+      navigate("/vendor/products");
+    },
+    onError: (e: unknown) => toast({ title: "Create failed", description: (e as Error).message, variant: "destructive" }),
+  });
+
   const handleSubmit = () => {
-    if (!name || !price || !category) {
+    if (!name || !price || !selectedCategory) {
       toast({ title: "Missing fields", description: "Please fill in product name, price, and category.", variant: "destructive" });
       return;
     }
-    toast({ title: "Product created!", description: `"${name}" has been added to your store.` });
-    navigate("/vendor/products");
+    createM.mutate();
   };
 
   return (
