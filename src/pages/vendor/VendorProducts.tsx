@@ -1,31 +1,43 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { products } from "@/data/mock-products";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Edit, Trash2, Star } from "lucide-react";
+import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { SearchEmpty } from "@/components/shared/EmptyState";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { TablePagination, usePagination } from "@/components/shared/Pagination";
 import { toast } from "@/hooks/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { vendorProductApi } from "@/api/vendorProductApi";
+import { Skeleton } from "@/components/ui/skeleton";
+import { paiseToRupees } from "@/lib/money";
 
 export default function VendorProducts() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
-  const vendorProducts = products.filter(p => p.vendorId === "v-1");
-  const filtered = vendorProducts.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
-  const { page, setPage, totalPages, paginatedItems, totalItems } = usePagination(filtered, 8);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["vendor", "products", "mine"],
+    queryFn: () => vendorProductApi.listMine(0, 200).then(r => r.data),
+  });
 
-  const handleDelete = () => {
-    if (deleteTarget) {
-      toast({ title: "Product deleted", description: `"${deleteTarget.name}" has been removed.` });
+  const archiveM = useMutation({
+    mutationFn: (id: string) => vendorProductApi.archive(id),
+    onSuccess: () => {
+      toast({ title: "Product archived", description: `"${deleteTarget?.name}" has been removed.` });
+      qc.invalidateQueries({ queryKey: ["vendor", "products", "mine"] });
       setDeleteTarget(null);
-    }
-  };
+    },
+    onError: (e: unknown) => toast({ title: "Failed to archive", description: (e as Error).message, variant: "destructive" }),
+  });
+
+  const vendorProducts = data?.items ?? [];
+  const filtered = vendorProducts.filter(p => p.title.toLowerCase().includes(search.toLowerCase()));
+  const { page, setPage, totalPages, paginatedItems, totalItems } = usePagination(filtered, 8);
 
   return (
     <div className="space-y-4">
@@ -44,8 +56,14 @@ export default function VendorProducts() {
 
       <Card className="shadow-card">
         <CardContent className="p-0">
-          {filtered.length === 0 && search ? (
+          {isLoading ? (
+            <div className="p-4 space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+          ) : isError ? (
+            <p className="p-6 text-sm text-destructive text-center">Failed to load products.</p>
+          ) : filtered.length === 0 && search ? (
             <SearchEmpty query={search} />
+          ) : filtered.length === 0 ? (
+            <p className="p-10 text-sm text-muted-foreground text-center">No products yet. Click "Add Product" to create your first listing.</p>
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -53,10 +71,8 @@ export default function VendorProducts() {
                   <thead>
                     <tr className="border-b bg-muted/50">
                       <th className="text-left p-3 font-medium">Product</th>
-                      <th className="text-left p-3 font-medium">Category</th>
+                      <th className="text-left p-3 font-medium">Status</th>
                       <th className="text-right p-3 font-medium">Price</th>
-                      <th className="text-center p-3 font-medium">Stock</th>
-                      <th className="text-center p-3 font-medium">Rating</th>
                       <th className="text-right p-3 font-medium">Actions</th>
                     </tr>
                   </thead>
@@ -65,27 +81,19 @@ export default function VendorProducts() {
                       <tr key={product.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                         <td className="p-3">
                           <div className="flex items-center gap-3">
-                            <img src={product.images[0]} alt={product.name} className="h-10 w-10 rounded-lg object-cover" />
+                            <img src={product.primaryImageUrl || "/placeholder.svg"} alt={product.title} className="h-10 w-10 rounded-lg object-cover bg-muted" />
                             <div>
-                              <p className="font-medium line-clamp-1">{product.name}</p>
-                              <p className="text-xs text-muted-foreground">{product.brand}</p>
+                              <p className="font-medium line-clamp-1">{product.title}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{product.slug}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="p-3 text-muted-foreground">{product.category}</td>
-                        <td className="p-3 text-right font-medium">₹{product.price.toLocaleString("en-IN")}</td>
-                        <td className="p-3 text-center">
-                          <Badge variant={product.stockCount > 100 ? "default" : product.stockCount > 10 ? "secondary" : "destructive"} className="text-xs">
-                            {product.stockCount}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-center">
-                          <span className="inline-flex items-center gap-0.5 text-xs"><Star className="h-3 w-3 fill-warning text-warning" />{product.rating}</span>
-                        </td>
+                        <td className="p-3"><Badge variant="outline" className="text-xs">{product.status}</Badge></td>
+                        <td className="p-3 text-right font-medium">₹{paiseToRupees(product.salePricePaise ?? product.basePricePaise).toLocaleString("en-IN")}</td>
                         <td className="p-3 text-right">
                           <div className="flex justify-end gap-1">
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/vendor/products/${product.id}/edit`)}><Edit className="h-3.5 w-3.5" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget({ id: product.id, name: product.name })}><Trash2 className="h-3.5 w-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget({ id: product.id, name: product.title })}><Trash2 className="h-3.5 w-3.5" /></Button>
                           </div>
                         </td>
                       </tr>
@@ -102,10 +110,10 @@ export default function VendorProducts() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={() => setDeleteTarget(null)}
-        title="Delete Product"
-        description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        onConfirm={handleDelete}
+        title="Archive Product"
+        description={`Archive "${deleteTarget?.name}"? It will be hidden from your storefront.`}
+        confirmLabel="Archive"
+        onConfirm={() => deleteTarget && archiveM.mutate(deleteTarget.id)}
       />
     </div>
   );
