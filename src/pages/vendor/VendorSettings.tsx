@@ -1,19 +1,63 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { vendors } from "@/data/mock-users";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { vendorApi } from "@/api/vendorApi";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function VendorSettings() {
-  const vendor = vendors[0];
   const { toast } = useToast();
+  const qc = useQueryClient();
 
-  const handleSave = () => {
-    toast({ title: "Settings saved", description: "Your store settings have been updated." });
-  };
+  const profileQ = useQuery({
+    queryKey: ["vendor", "me", "profile"],
+    queryFn: () => vendorApi.myProfile().then(r => r.data),
+  });
+
+  const [storeName, setStoreName] = useState("");
+  const [description, setDescription] = useState("");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [supportPhone, setSupportPhone] = useState("");
+  const [returnPolicy, setReturnPolicy] = useState("");
+
+  useEffect(() => {
+    if (profileQ.data) {
+      setStoreName(profileQ.data.storeName ?? "");
+      setDescription(profileQ.data.description ?? "");
+      setSupportEmail(profileQ.data.supportEmail ?? "");
+      setSupportPhone(profileQ.data.supportPhone ?? "");
+      setReturnPolicy(profileQ.data.returnPolicy ?? "");
+    }
+  }, [profileQ.data]);
+
+  const saveM = useMutation({
+    mutationFn: () => vendorApi.updateProfileV2({
+      storeName, description, supportEmail, supportPhone, returnPolicy,
+    }),
+    onSuccess: () => {
+      toast({ title: "Settings saved", description: "Your store settings have been updated." });
+      qc.invalidateQueries({ queryKey: ["vendor", "me", "profile"] });
+    },
+    onError: (e: unknown) => toast({ title: "Save failed", description: (e as Error).message, variant: "destructive" }),
+  });
+
+  if (profileQ.isLoading) {
+    return <div className="space-y-3 max-w-2xl"><Skeleton className="h-8 w-1/2" /><Skeleton className="h-64" /></div>;
+  }
+
+  if (profileQ.isError) {
+    return (
+      <div className="max-w-2xl">
+        <Card className="shadow-card"><CardContent className="p-8 text-center text-sm text-muted-foreground">
+          Vendor profile is not available yet. Complete onboarding to access settings.
+        </CardContent></Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -22,37 +66,25 @@ export default function VendorSettings() {
       <Card className="shadow-card">
         <CardHeader><CardTitle className="text-base">Store Information</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-4 mb-2">
-            <div className="h-16 w-16 rounded-xl bg-primary/10 flex items-center justify-center text-3xl">{vendor.logo}</div>
-            <Button variant="outline" size="sm">Change Logo</Button>
-          </div>
-          <div><Label className="text-xs">Store Name</Label><Input defaultValue={vendor.storeName} className="mt-1" /></div>
-          <div><Label className="text-xs">Description</Label><Textarea defaultValue={vendor.description} className="mt-1" rows={3} /></div>
+          <div><Label className="text-xs">Store Name</Label><Input value={storeName} onChange={e => setStoreName(e.target.value)} className="mt-1" /></div>
+          <div><Label className="text-xs">Description</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} className="mt-1" rows={3} /></div>
           <div className="grid grid-cols-2 gap-4">
-            <div><Label className="text-xs">Category</Label><Input defaultValue={vendor.category} className="mt-1" /></div>
-            <div><Label className="text-xs">Contact Email</Label><Input defaultValue="priya@vendor.com" className="mt-1" /></div>
+            <div><Label className="text-xs">Support Email</Label><Input type="email" value={supportEmail} onChange={e => setSupportEmail(e.target.value)} className="mt-1" /></div>
+            <div><Label className="text-xs">Support Phone</Label><Input value={supportPhone} onChange={e => setSupportPhone(e.target.value)} className="mt-1" /></div>
           </div>
         </CardContent>
       </Card>
 
       <Card className="shadow-card">
-        <CardHeader><CardTitle className="text-base">Business Details</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div><Label className="text-xs">GST Number</Label><Input defaultValue="29AABCU9603R1ZM" className="mt-1" /></div>
-          <div><Label className="text-xs">PAN Number</Label><Input defaultValue="AABCU9603R" className="mt-1" /></div>
-          <div><Label className="text-xs">Bank Account (IFSC)</Label><Input defaultValue="HDFC0001234" className="mt-1" /></div>
+        <CardHeader><CardTitle className="text-base">Return Policy</CardTitle></CardHeader>
+        <CardContent>
+          <Textarea value={returnPolicy} onChange={e => setReturnPolicy(e.target.value)} rows={3} />
         </CardContent>
       </Card>
 
-      <Card className="shadow-card">
-        <CardHeader><CardTitle className="text-base">Shipping & Return Policy</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div><Label className="text-xs">Shipping Policy</Label><Textarea defaultValue="Free shipping on orders above ₹499. Standard delivery in 3-5 business days." className="mt-1" rows={2} /></div>
-          <div><Label className="text-xs">Return Policy</Label><Textarea defaultValue="7-day easy returns on all products. Refund processed within 5-7 business days." className="mt-1" rows={2} /></div>
-        </CardContent>
-      </Card>
-
-      <Button onClick={handleSave} className="w-full">Save Changes</Button>
+      <Button onClick={() => saveM.mutate()} disabled={saveM.isPending} className="w-full">
+        {saveM.isPending ? "Saving..." : "Save Changes"}
+      </Button>
     </div>
   );
 }

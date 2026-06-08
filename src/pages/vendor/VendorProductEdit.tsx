@@ -10,8 +10,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Upload, X, Plus, Trash2, GripVertical, ImagePlus, Save } from "lucide-react";
-import { categories, products } from "@/data/mock-products";
 import { toast } from "@/hooks/use-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { categoryApi } from "@/api/categoryApi";
+import { vendorProductApi } from "@/api/vendorProductApi";
+import { paiseToRupees, rupeesToPaise } from "@/lib/money";
 
 interface Variant { name: string; options: string[]; }
 interface SpecRow { key: string; value: string; }
@@ -19,7 +22,19 @@ interface SpecRow { key: string; value: string; }
 export default function VendorProductEdit() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const product = products.find(p => p.id === id);
+  const { data: product } = useQuery({
+    queryKey: ["vendor", "product", id],
+    queryFn: () => vendorProductApi.get(id!).then(r => r.data),
+    enabled: !!id,
+  });
+  const categoriesQ = useQuery({
+    queryKey: ["catalog", "categories", "tree"],
+    queryFn: () => categoryApi.getCategoryTree().then(r => r.data),
+  });
+  const categories = (categoriesQ.data ?? []).map(c => ({
+    id: c.id, name: c.name, slug: c.slug, icon: c.icon ?? "",
+    subcategories: (c.children ?? []).map(ch => ch.name),
+  }));
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -43,23 +58,16 @@ export default function VendorProductEdit() {
 
   useEffect(() => {
     if (product) {
-      setName(product.name);
-      setDescription(product.description);
-      const cat = categories.find(c => c.name === product.category);
+      setName(product.title);
+      setDescription(product.description ?? "");
+      const cat = categories.find(c => c.id === product.categoryId);
       setCategory(cat?.slug || "");
-      setSubcategory(product.subcategory);
-      setBrand(product.brand);
-      setTags([...product.tags]);
-      setPrice(product.price.toString());
-      setOriginalPrice(product.originalPrice.toString());
-      setSku(`SKU-${product.id}`);
-      setStockCount(product.stockCount.toString());
-      setImages([...product.images]);
-      setVariants(product.variants.map(v => ({ ...v, options: [...v.options] })));
-      setSpecs(Object.entries(product.specs).map(([key, value]) => ({ key, value: String(value) })));
-      setFeatured(product.featured);
+      setPrice(String(paiseToRupees(product.salePricePaise ?? product.basePricePaise)));
+      setOriginalPrice(String(paiseToRupees(product.basePricePaise)));
+      setImages(product.primaryImageUrl ? [product.primaryImageUrl] : []);
     }
-  }, [product]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product, categoriesQ.data]);
 
   const selectedCategory = categories.find(c => c.slug === category);
 
@@ -106,13 +114,26 @@ export default function VendorProductEdit() {
   const discount = originalPrice && price
     ? Math.round(((parseFloat(originalPrice) - parseFloat(price)) / parseFloat(originalPrice)) * 100) : 0;
 
+  const updateM = useMutation({
+    mutationFn: () => vendorProductApi.update(id!, {
+      title: name, description,
+      categoryId: selectedCategory?.id ?? product?.categoryId,
+      basePricePaise: rupeesToPaise(originalPrice || price),
+      salePricePaise: originalPrice ? rupeesToPaise(price) : undefined,
+      primaryImageUrl: images[0],
+    }),
+    onSuccess: () => {
+      toast({ title: "Product updated!", description: `"${name}" has been saved.` });
+      navigate("/vendor/products");
+    },
+    onError: (e: unknown) => toast({ title: "Update failed", description: (e as Error).message, variant: "destructive" }),
+  });
   const handleSubmit = () => {
     if (!name || !price || !category) {
       toast({ title: "Missing fields", description: "Please fill in product name, price, and category.", variant: "destructive" });
       return;
     }
-    toast({ title: "Product updated!", description: `"${name}" has been saved.` });
-    navigate("/vendor/products");
+    updateM.mutate();
   };
 
   if (!product) {
@@ -132,7 +153,7 @@ export default function VendorProductEdit() {
         <Button variant="ghost" size="icon" onClick={() => navigate("/vendor/products")}><ArrowLeft className="h-4 w-4" /></Button>
         <div className="flex-1">
           <h1 className="font-display text-xl font-bold">Edit Product</h1>
-          <p className="text-sm text-muted-foreground">Update details for "{product.name}"</p>
+          <p className="text-sm text-muted-foreground">Update details for "{product.title}"</p>
         </div>
         <Badge variant="outline" className="hidden sm:inline-flex">{product.id}</Badge>
       </div>

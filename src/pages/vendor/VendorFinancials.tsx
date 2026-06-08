@@ -3,31 +3,41 @@ import { StatCard } from "@/components/shared/StatCard";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, TrendingUp, Wallet, ArrowDownToLine } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
+import { vendorPayoutApi, type PayoutStatus } from "@/api/vendorPayoutApi";
+import { vendorSettlementApi } from "@/api/vendorSettlementApi";
+import { Skeleton } from "@/components/ui/skeleton";
+import { paiseToRupees } from "@/lib/money";
 
-const revenueData = [
-  { month: "Sep", revenue: 820000, payout: 738000 },
-  { month: "Oct", revenue: 1150000, payout: 1035000 },
-  { month: "Nov", revenue: 1890000, payout: 1701000 },
-  { month: "Dec", revenue: 2340000, payout: 2106000 },
-  { month: "Jan", revenue: 1560000, payout: 1404000 },
-  { month: "Feb", revenue: 1230000, payout: 1107000 },
-];
-
-const payouts = [
-  { id: "PAY-001", date: "2025-02-28", amount: 1107000, status: "completed" },
-  { id: "PAY-002", date: "2025-01-31", amount: 1404000, status: "completed" },
-  { id: "PAY-003", date: "2024-12-31", amount: 2106000, status: "completed" },
-  { id: "PAY-004", date: "2024-11-30", amount: 1701000, status: "completed" },
-  { id: "PAY-005", date: "2025-03-15", amount: 980000, status: "pending" },
-];
-
-const fmt = (p: number) => `₹${(p / 100000).toFixed(1)}L`;
+const statusColors: Record<PayoutStatus, string> = {
+  SCHEDULED: "bg-muted text-muted-foreground",
+  PENDING: "bg-warning/10 text-warning",
+  PROCESSING: "bg-primary/10 text-primary",
+  PAID: "bg-success/10 text-success",
+  FAILED: "bg-destructive/10 text-destructive",
+  CANCELLED: "bg-muted text-muted-foreground",
+};
 
 export default function VendorFinancials() {
   const navigate = useNavigate();
+
+  const payoutsQ = useQuery({
+    queryKey: ["vendor", "payouts"],
+    queryFn: () => vendorPayoutApi.list(0, 20).then(r => r.data),
+  });
+  const settlementsQ = useQuery({
+    queryKey: ["vendor", "settlements"],
+    queryFn: () => vendorSettlementApi.list(0, 20).then(r => r.data),
+  });
+
+  const payouts = payoutsQ.data?.items ?? [];
+  const settlements = settlementsQ.data?.items ?? [];
+  const totalPaid = payouts.filter(p => p.status === "PAID").reduce((a, p) => a + p.amountPaise, 0);
+  const pending = payouts.filter(p => p.status === "PENDING" || p.status === "PROCESSING").reduce((a, p) => a + p.amountPaise, 0);
+  const settled = settlements.reduce((a, s) => a + s.netPayablePaise, 0);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -36,55 +46,64 @@ export default function VendorFinancials() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Revenue" value="₹89.5L" icon={DollarSign} change="+12%" changeType="positive" />
-        <StatCard title="This Month" value="₹12.3L" icon={TrendingUp} change="-5%" changeType="negative" />
-        <StatCard title="Pending Payout" value="₹9.8L" icon={Wallet} change="Processing" changeType="neutral" />
-        <StatCard title="Commission Rate" value="10%" icon={ArrowDownToLine} />
+        <StatCard title="Total Paid" value={payoutsQ.isLoading ? "—" : `₹${(paiseToRupees(totalPaid) / 100000).toFixed(2)}L`} icon={DollarSign} />
+        <StatCard title="Pending Payout" value={payoutsQ.isLoading ? "—" : `₹${(paiseToRupees(pending) / 100000).toFixed(2)}L`} icon={Wallet} />
+        <StatCard title="Settled (period)" value={settlementsQ.isLoading ? "—" : `₹${(paiseToRupees(settled) / 100000).toFixed(2)}L`} icon={TrendingUp} />
+        <StatCard title="Payout Count" value={payoutsQ.isLoading ? "—" : String(payouts.length)} icon={ArrowDownToLine} />
       </div>
 
       <Card className="shadow-card">
-        <CardHeader><CardTitle className="text-base">Revenue vs Payouts</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Payouts</CardTitle></CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={revenueData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="month" className="text-xs" />
-              <YAxis tickFormatter={v => `₹${(v/100000).toFixed(0)}L`} className="text-xs" />
-              <Tooltip formatter={(v: number) => fmt(v)} />
-              <Area type="monotone" dataKey="revenue" className="fill-primary/20 stroke-primary" strokeWidth={2} />
-              <Area type="monotone" dataKey="payout" className="fill-success/20 stroke-success" strokeWidth={2} />
-            </AreaChart>
-          </ResponsiveContainer>
+          {payoutsQ.isLoading ? (
+            <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : payoutsQ.isError ? (
+            <p className="text-sm text-destructive text-center py-6">Failed to load payouts.</p>
+          ) : payouts.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No payouts yet.</p>
+          ) : (
+            <Table>
+              <TableHeader><TableRow><TableHead>Payout ID</TableHead><TableHead>Scheduled</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {payouts.map(p => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-mono text-xs">{p.id.slice(0, 8)}</TableCell>
+                    <TableCell className="text-sm">{p.scheduledAt ? new Date(p.scheduledAt).toLocaleDateString("en-IN") : "—"}</TableCell>
+                    <TableCell className="font-medium">₹{paiseToRupees(p.amountPaise).toLocaleString("en-IN")}</TableCell>
+                    <TableCell><Badge variant="secondary" className={`text-xs border-0 ${statusColors[p.status]}`}>{p.status}</Badge></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
       <Card className="shadow-card">
-        <CardHeader><CardTitle className="text-base">Payout History</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Settlements</CardTitle></CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Payout ID</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {payouts.map(p => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono text-sm">{p.id}</TableCell>
-                  <TableCell className="text-sm">{new Date(p.date).toLocaleDateString("en-IN")}</TableCell>
-                  <TableCell className="font-medium">₹{p.amount.toLocaleString("en-IN")}</TableCell>
-                  <TableCell>
-                    <Badge variant={p.status === "completed" ? "default" : "secondary"} className={p.status === "completed" ? "bg-success/10 text-success border-0" : ""}>
-                      {p.status}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          {settlementsQ.isLoading ? (
+            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : settlementsQ.isError ? (
+            <p className="text-sm text-destructive text-center py-6">Failed to load settlements.</p>
+          ) : settlements.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No settlements yet.</p>
+          ) : (
+            <Table>
+              <TableHeader><TableRow><TableHead>Period</TableHead><TableHead>Gross</TableHead><TableHead>Commission</TableHead><TableHead>Net</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {settlements.map(s => (
+                  <TableRow key={s.id}>
+                    <TableCell className="text-sm">{new Date(s.periodStart).toLocaleDateString("en-IN")} – {new Date(s.periodEnd).toLocaleDateString("en-IN")}</TableCell>
+                    <TableCell>₹{paiseToRupees(s.grossPaise).toLocaleString("en-IN")}</TableCell>
+                    <TableCell>₹{paiseToRupees(s.commissionPaise).toLocaleString("en-IN")}</TableCell>
+                    <TableCell className="font-medium">₹{paiseToRupees(s.netPayablePaise).toLocaleString("en-IN")}</TableCell>
+                    <TableCell><Badge variant="outline">{s.status}</Badge></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
