@@ -114,7 +114,6 @@ export default function VendorProductEdit() {
   const discount = originalPrice && price
     ? Math.round(((parseFloat(originalPrice) - parseFloat(price)) / parseFloat(originalPrice)) * 100) : 0;
 
-  const selectedCategory = categories.find(c => c.slug === category);
   const updateM = useMutation({
     mutationFn: () => vendorProductApi.update(id!, {
       title: name, description,
@@ -154,7 +153,7 @@ export default function VendorProductEdit() {
         <Button variant="ghost" size="icon" onClick={() => navigate("/vendor/products")}><ArrowLeft className="h-4 w-4" /></Button>
         <div className="flex-1">
           <h1 className="font-display text-xl font-bold">Edit Product</h1>
-          <p className="text-sm text-muted-foreground">Update details for "{product.name}"</p>
+          <p className="text-sm text-muted-foreground">Update details for "{product.title}"</p>
         </div>
         <Badge variant="outline" className="hidden sm:inline-flex">{product.id}</Badge>
       </div>
